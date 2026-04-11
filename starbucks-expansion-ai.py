@@ -12,15 +12,24 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- CSS CORRIGIDO (Compatível com Dark e Light Mode) ---
+# --- CSS (Melhorado para os Cards de Cenário) ---
 st.markdown("""
     <style>
     .metric-container {
         background-color: rgba(128, 128, 128, 0.1);
-        padding: 20px;
+        padding: 15px;
         border-radius: 10px;
         border: 1px solid #31333F;
+        text-align: center;
+    }
+    .scenario-card {
+        background-color: #f0f2f6;
+        color: #1e3d33;
+        padding: 15px;
+        border-radius: 8px;
+        border-top: 4px solid #00704A;
         margin-bottom: 10px;
+        font-size: 0.9rem;
     }
     .insight-box {
         background-color: #1e3d33;
@@ -37,11 +46,11 @@ st.title("☕ Starbucks Insights: Simulador de Expansão")
 st.markdown("### Estudo de Caso: Análise de Vazios Comerciais via IA Geográfica")
 
 # --- SIDEBAR ---
-st.sidebar.header("📂 Configurações")
+st.sidebar.header("📂 Configurações de Dados")
 uploaded_file = st.sidebar.file_uploader("Upload do CSV", type=["csv"])
-gemini_key = st.sidebar.text_input("Gemini API Key (Opcional)", type="password")
+gemini_key = st.sidebar.text_input("Gemini API Key", type="password")
 
-# --- FUNÇÃO DE CARREGAMENTO RESILIENTE ---
+# --- FUNÇÃO DE CARREGAMENTO ---
 @st.cache_data
 def load_data(file):
     try:
@@ -49,98 +58,96 @@ def load_data(file):
     except:
         file.seek(0)
         df = pd.read_csv(file, encoding='latin-1')
-    
-    # Padronização de Colunas
     df.columns = [c.strip() for c in df.columns]
-    mapping = {
-        'Latitude': 'lat', 'longitude': 'lon', 'Longitude': 'lon', 'latitude': 'lat',
-        'City': 'Cidade', 'Country': 'País', 'State/Province': 'Estado'
-    }
-    df = df.rename(columns=mapping)
-    return df
+    mapping = {'Latitude': 'lat', 'longitude': 'lon', 'Longitude': 'lon', 'latitude': 'lat',
+               'City': 'Cidade', 'Country': 'País', 'State/Province': 'Estado'}
+    return df.rename(columns=mapping)
 
 if uploaded_file:
     df = load_data(uploaded_file)
     df = df.dropna(subset=['lat', 'lon'])
 
-    # --- FILTROS ---
+    # --- FILTROS GEOGRÁFICOS ---
     paises = sorted(df['País'].unique().astype(str))
     pais_sel = st.sidebar.selectbox("País", paises)
     df_filtrado = df[df['País'] == pais_sel]
-
-    estados = sorted(df_filtrado['Estado'].dropna().unique().astype(str))
-    estado_sel = st.sidebar.selectbox("Estado", ["Todos"] + estados)
-    if estado_sel != "Todos":
-        df_filtrado = df_filtrado[df_filtrado['Estado'] == estado_sel]
 
     cidades = sorted(df_filtrado['Cidade'].dropna().unique().astype(str))
     cidade_sel = st.sidebar.selectbox("Cidade", ["Todas"] + cidades)
     if cidade_sel != "Todas":
         df_filtrado = df_filtrado[df_filtrado['Cidade'] == cidade_sel]
 
-    # --- MÉTRICAS (Formatadas para visibilidade) ---
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.markdown(f'<div class="metric-container"><b>Total de Lojas</b><br><h2>{len(df_filtrado)}</h2></div>', unsafe_allow_html=True)
-    with col2:
-        st.markdown(f'<div class="metric-container"><b>Região</b><br><h2>{pais_sel}</h2></div>', unsafe_allow_html=True)
-    with col3:
-        st.markdown(f'<div class="metric-container"><b>Cidades Atendidas</b><br><h2>{df_filtrado["Cidade"].nunique()}</h2></div>', unsafe_allow_html=True)
+    # --- SEÇÃO: SIMULADOR DE CENÁRIOS (KPIs do Orientador) ---
+    st.divider()
+    st.subheader("🛠️ Simulador de Cenários de Expansão")
+    st.info("Ajuste os indicadores abaixo para definir o perfil da nova unidade.")
+
+    col_kpi1, col_kpi2, col_kpi3, col_kpi4 = st.columns(4)
+
+    with col_kpi1:
+        densidade = st.slider("Densidade Populacional", 0, 50000, 15000, help="Habitantes por km²")
+    with col_kpi2:
+        renda_superior = st.checkbox("Renda > 30% da Média", value=True)
+        renda_texto = "Superior a 30%" if renda_superior else "Média Nacional"
+    with col_kpi3:
+        publico_jovem = st.select_slider("Público Jovem", options=["Baixo", "Médio", "Alto"], value="Alto")
+    with col_kpi4:
+        fluxo_pedestres = st.selectbox("Fluxo de Pedestres", ["Zonas Residenciais", "Centros Comerciais", "Hubs de Transporte"])
+
+    # --- EXIBIÇÃO DOS CARDS DO CENÁRIO ATUAL ---
+    st.markdown("#### 📋 Resumo do Cenário Configurado")
+    c1, c2, c3, c4 = st.columns(4)
+    c1.markdown(f'<div class="scenario-card"><b>Densidade:</b><br>{densidade} hab/km²</div>', unsafe_allow_html=True)
+    c2.markdown(f'<div class="scenario-card"><b>Renda Familiar:</b><br>{renda_texto}</div>', unsafe_allow_html=True)
+    c3.markdown(f'<div class="scenario-card"><b>Público Alvo:</b><br>Jovens ({publico_jovem})</div>', unsafe_allow_html=True)
+    c4.markdown(f'<div class="scenario-card"><b>Localização:</b><br>{fluxo_pedestres}</div>', unsafe_allow_html=True)
 
     # --- MAPA ---
     st.subheader("🗺️ Mapeamento de Unidades Atuais")
     center = [df_filtrado['lat'].mean(), df_filtrado['lon'].mean()]
     m = folium.Map(location=center, zoom_start=12 if cidade_sel != "Todas" else 4, tiles="cartodbpositron")
-    
     cluster = MarkerCluster().add_to(m)
     for _, row in df_filtrado.iterrows():
-        folium.Marker(
-            location=[row['lat'], row['lon']],
-            popup=row.get('Store Name', 'Starbucks'),
-            icon=folium.Icon(color='green', icon='coffee', prefix='fa')
-        ).add_to(cluster)
-    
-    st_folium(m, width="100%", height=450, returned_objects=[])
+        folium.Marker(location=[row['lat'], row['lon']], icon=folium.Icon(color='green', icon='coffee', prefix='fa')).add_to(cluster)
+    st_folium(m, width="100%", height=400, returned_objects=[])
 
-    # --- ÁREA DE INSIGHTS (CORRIGIDA) ---
+    # --- ÁREA DE INSIGHTS COM IA ---
     st.divider()
-    st.subheader("🤖 IA Strategic Insights: Plano de Expansão")
+    st.subheader("🤖 IA Strategic Insights")
     
-    # Usando st.expander para o insight não sumir e ficar organizado
-    with st.expander("Clique para Analisar Oportunidades de Expansão", expanded=True):
-        if st.button("🚀 Gerar Análise de Vazios Comerciais"):
+    if st.button("🚀 Gerar Análise de Expansão Baseada no Cenário"):
+        if not gemini_key:
+            st.warning("Por favor, insira a Gemini API Key na barra lateral.")
+        else:
             nome_regiao = cidade_sel if cidade_sel != "Todas" else pais_sel
             
-            with st.spinner(f"IA analisando densidade de lojas em {nome_regiao}..."):
-                if not gemini_key:
-                    # SIMULAÇÃO DETALHADA PARA O TCC
-                    st.success("Análise Concluída (Modo Simulação Estatística)")
-                    st.markdown(f"""
-                    <div class="insight-box">
-                        <h4>Relatório de Expansão: {nome_regiao}</h4>
-                        <p><b>1. Identificação de Vazio Comercial:</b> Detectamos uma lacuna de atendimento num raio de 5km em zonas de alta densidade corporativa.</p>
-                        <p><b>2. Sugestão de Localização:</b> Bairros periféricos com crescimento vertical (novos prédios) apresentam demanda represada.</p>
-                        <p><b>3. Modelo de Loja:</b> Recomendado formato 'Starbucks Pick-up' para otimizar custos operacionais em áreas de alto aluguel.</p>
-                        <hr>
-                        <small><i>Nota: Para insights geográficos precisos via satélite, insira sua Gemini API Key na barra lateral.</i></small>
-                    </div>
-                    """, unsafe_allow_html=True)
-                else:
-                    # CHAMADA REAL GEMINI
-                    try:
-                        genai.configure(api_key=gemini_key)
-                        model = genai.GenerativeModel('gemini-pro')
-                        prompt = f"""
-                        Como especialista em expansão da Starbucks, analise a região de {nome_regiao} que possui {len(df_filtrado)} lojas.
-                        1. Identifique 3 possíveis 'vazios comerciais' (bairros ou zonas) para novas lojas.
-                        2. Justifique com base em público-alvo (proximidade de escritórios ou universidades).
-                        3. Sugira se a loja deve ser Drive-thru ou tradicional.
-                        Seja muito específico e use um tom executivo.
-                        """
-                        response = model.generate_content(prompt)
-                        st.markdown(f'<div class="insight-box">{response.text}</div>', unsafe_allow_html=True)
-                    except Exception as e:
-                        st.error(f"Erro na conexão com a IA: {e}")
+            with st.spinner("IA processando cenário..."):
+                try:
+                    genai.configure(api_key=gemini_key)
+                    # Usando o modelo que apareceu na sua lista anterior
+                    model = genai.GenerativeModel('gemini-flash-latest') 
+                    
+                    prompt = f"""
+                    Como consultor estratégico da Starbucks, analise a expansão em {nome_regiao}.
+                    Atualmente existem {len(df_filtrado)} lojas nesta região.
+                    
+                    Considere o seguinte CENÁRIO DE EXPANSÃO configurado pelo usuário:
+                    1. Densidade Populacional Alvo: {densidade} hab/km².
+                    2. Perfil de Renda: {renda_texto}.
+                    3. Concentração de Público Jovem: {publico_jovem}.
+                    4. Tipo de Fluxo: {fluxo_pedestres}.
+                    
+                    TAREFAS:
+                    - Identifique 2 áreas geográficas em {nome_regiao} que deem match com esses critérios.
+                    - Explique por que esses KPIs (Densidade e Renda) são cruciais para o sucesso dessa nova loja.
+                    - Sugira o formato de loja (Drive-thru, Quiosque ou Flagship) baseado no fluxo de {fluxo_pedestres}.
+                    """
+                    
+                    response = model.generate_content(prompt)
+                    st.markdown(f'<div class="insight-box">{response.text}</div>', unsafe_allow_html=True)
+                    
+                except Exception as e:
+                    st.error(f"Erro: {e}")
 
 else:
-    st.info("👋 Bem-vindo! Por favor, carregue o arquivo CSV na barra lateral para iniciar o simulador.")
+    st.info("👋 Carregue o CSV para ativar o simulador.")

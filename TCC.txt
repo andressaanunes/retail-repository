@@ -1,0 +1,62 @@
+** TENHO 1 ano de dados de 2023
+** O Modelo é feito para propor a estratégia:
+proponha estratégias para gerar KPI´s
+KPI: população minima(regra de negócio da starbucks + 2 milhões), distância(minima), 
+tipo de estratégia: localização 
+Cenário: criou KPI´s 
+Titulo: Desenvolvimento de uma interface utilizando IA para analisar e visualizar os vazios comerciais: Estudo de caso de expansão do Starbucks.
+Contexto: Evolução da IA, analise e expansão, aplicação de IA em expansão, estudo de expansão.
+Objetivo: Exibir Mapa de Unidades Atuais,  Gerar Análise de vazios Comerciais(tenho que gerar, latitude, longitude, distância).
+A IA tem que gerar um circulo na região onde tem o vazio comercial para a pessoa escolher qual estabelecimento ele quer (Exibir onde são as regiões para implementação).
+Enriquecer(Intensidade de vazio (circulo(onde tem uma parte mais promissora), gerar uma analise de potencial.
+Foco: Interface
+motivação: Facilitar a analise de dados e insights, usar referência bibliográfica.
+Pergunta: É possível usar a IA para auxiliar na analise estratégica de expansão das lojas da starbucks.
+Revisão bibliográfica: Data & Insights, IA, prompts de comando da IA.
+*** PROJECT
+CRIAR KABAN
+CRIAR SCRUM 
+ATIVIDADES
+DIVIDIR AS ATIVIDADES
+Ideia dos cenários
+KPIS
+
+*** e se a gente pode-se apresentar pro usuário a criar cenários, renda da população (?).
+apartir de X renda podemos criar um loja.
+**Analise de cenários
+A pessoa pode criar cenários mudando os valores desses KPI's
+Permitir que a pessoa crie os cards desse cenário
+Indicadores:
+1.densidade populacional,
+2.renda familiar 30% superior à média nacional,
+3.presença de público jovem
+4.áreas com alto fluxo de pedestres.
+
+*** Figura 1 (negrito, alinhado a esquerda) depois dos dois pontos sem negrito
+imagem
+Elaborada pelos autores
+*** Algoritimo 1: Legenda
+Código
+Desenvolvida pelos autores
+
+
+PRINTS e Algoritmos na sessão de resultado
+geração de valor para o usuário
+
+***RESULTADO
+DISCUSSÃO DOS RESULTADOS
+Criar um formulário
+A escala Likert é um método psicométrico de resposta usado em questionários para medir atitudes, opiniões ou o grau de concordância com afirmações, variando geralmente de "concordo totalmente" a "discordo totalmente"
+criar 7 perguntas
+você acha que uma plataforma para avaliar a expansão de lojas (no caso do starbucks) seria utilizavel pra vocêw
+definir a amostra: Quem vai responder essa amostra? 
+Gerente executivo, Analistas, estagiários, pesssoas da área de TI, pessoas leigas, outros departamentos,
+importância de entrevistar. (time do intercafe)
+QUEM VAI COMPOR AMOSTRA?
+33 pessoas para ter na amostra
+7 alunos
+7 professores
+7 profissionais da área
+EXTRATIFICAR A AMOSTRA
+ 
+
