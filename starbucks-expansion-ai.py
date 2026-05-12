@@ -234,5 +234,67 @@ if uploaded_file:
             st.markdown(f"**Design Sugerido: {fmt.title()}**")
             st.markdown(f'<img src="{STORE_IMAGES[fmt]}" class="store-design-img">', unsafe_allow_html=True)
             st.caption("Referência de arquitetura para o formato sugerido.")
+            # --- NOVO TRECHO: FORMULÁRIO LIKERT DE EXPERIÊNCIA DO USUÁRIO ---
+        st.markdown("<br><br>", unsafe_allow_html=True)
+        st.divider()
+        
+        # Botão de ativação do formulário
+        if 'show_survey' not in st.session_state: st.session_state.show_survey = False
+        
+        c1, c2, c3 = st.columns([1, 1, 1])
+        with c2:
+            if st.button("📊 Avaliar Experiência da Interface"):
+                st.session_state.show_survey = not st.session_state.show_survey
+
+        if st.session_state.show_survey:
+            with st.container(border=True):
+                st.markdown(f"<h3 style='text-align: center; color: {accent};'>Sua opinião é fundamental!</h3>", unsafe_allow_html=True)
+                st.markdown("<p style='text-align: center;'>Responda como foi sua experiência com esta ferramenta de análise:</p>", unsafe_allow_html=True)
+                
+                # Perguntas elaboradas sobre UX
+                questions = [
+                    "1. A interface é intuitiva e facilitou a configuração do seu cenário?",
+                    "2. O design visual e as cores ajudaram na compreensão dos dados?",
+                    "3. A análise gerada pela IA foi relevante e clara para sua estratégia?",
+                    "4. O mapa interativo facilitou a visualização das novas oportunidades?"
+                ]
+                
+                # Mapeamento de níveis e emojis conforme a imagem
+                options = ["Worst", "Poor", "Average", "Good", "Excellent"]
+                emojis = {"Worst": "😠", "Poor": "😟", "Average": "😐", "Good": "🙂", "Excellent": "😄"}
+                colors = {"Worst": "#d32f2f", "Poor": "#f4511e", "Average": "#ffa000", "Good": "#afb42b", "Excellent": "#388e3c"}
+
+                for i, q in enumerate(questions):
+                    st.markdown(f"**{q}**")
+                    
+                    # Slider Likert
+                    resp = st.select_slider(
+                        label=f"q_{i}",
+                        options=options,
+                        value="Average",
+                        label_visibility="collapsed",
+                        key=f"likert_question_{i}"
+                    )
+                    
+                    # Representação Visual das "Carinhas"
+                    cols = st.columns(5)
+                    for idx, opt in enumerate(options):
+                        is_selected = (resp == opt)
+                        opac = "1.0" if is_selected else "0.3"
+                        f_weight = "bold" if is_selected else "normal"
+                        curr_color = colors[opt] if is_selected else text_sub
+                        
+                        cols[idx].markdown(
+                            f"""<div style="text-align: center; opacity: {opac}; transition: 0.3s;">
+                                <span style="font-size: 24px;">{emojis[opt]}</span><br>
+                                <small style="color: {curr_color}; font-weight: {f_weight};">{opt}</small>
+                            </div>""", 
+                            unsafe_allow_html=True
+                        )
+                    st.markdown("<br>", unsafe_allow_html=True)
+                
+                if st.button("Enviar Avaliação"):
+                    st.success("Obrigado pelo seu feedback! Isso nos ajuda a melhorar a interface.")
+                    st.balloons()
 else:
     st.info(t['aviso_csv'])
