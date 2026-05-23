@@ -18,9 +18,13 @@ st.set_page_config(
 )
 
 # --- CONFIGURAÇÃO SUPABASE ---
-url: str = st.secrets["SUPABASE_URL"]
-key: str = st.secrets["SUPABASE_KEY"]
-supabase: Client = create_client(url, key)
+# Certifique-se que SUPABASE_URL e SUPABASE_KEY estão nos Secrets do Streamlit Cloud
+try:
+    url: str = st.secrets["SUPABASE_URL"]
+    key: str = st.secrets["SUPABASE_KEY"]
+    supabase: Client = create_client(url, key)
+except Exception as e:
+    st.error("Erro nas credenciais do Supabase. Verifique os Secrets.")
 
 # --- SISTEMA DE ESTADO INICIAL ---
 if 'lang' not in st.session_state: st.session_state.lang = 'PT' 
@@ -30,7 +34,6 @@ if 'expansion_coords' not in st.session_state: st.session_state.expansion_coords
 if 'suggested_format' not in st.session_state: st.session_state.suggested_format = "core"
 if 'show_survey' not in st.session_state: st.session_state.show_survey = False
 
-# Banco de Imagens
 STORE_IMAGES = {
     "drive-thru": "https://images.unsplash.com/photo-1600093463592-8e36ae95ef56?q=80&w=1000&auto=format&fit=crop",
     "flagship": "https://images.unsplash.com/photo-1554118811-1e0d58224f24?q=80&w=1000&auto=format&fit=crop",
@@ -38,11 +41,12 @@ STORE_IMAGES = {
     "core": "https://images.unsplash.com/photo-1501339817302-4448f9958e74?q=80&w=1000&auto=format&fit=crop"
 }
 
-# --- FUNÇÃO DE CACHE DA IA (Evita erro 429 e economiza cota) ---
+# --- FUNÇÃO DE CACHE DA IA ---
 @st.cache_data(show_spinner=False)
 def obter_analise_ia(api_key, cidade, num_lojas, densidade, renda, publico, fluxo):
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel('gemini-flash-latest')
+    # Usando gemini-1.5-flash ou gemini-pro (mais estável)
+    model = genai.GenerativeModel('gemini-1.5-flash')
     prompt = f"""
     Consultor estratégico: analise expansão em {cidade}. Lojas atuais: {num_lojas}. 
     Cenário: Densidade {densidade}, Renda {renda}, Público {publico}, Fluxo {fluxo}. 
@@ -61,15 +65,16 @@ t_dict = {
         'title': "☕ Retail Insights", 'subtitle': "Simulador de Expansão - Análise de Vazios Comerciais via IA Geográfica",
         'config': "Configurações de Dados", 'upload': "Upload do CSV", 'pais': "País", 'estado': "Estado", 'cidade': "Cidade", 'todas': "Todas",
         'simulador_h': "Simulador de Cenários", 'densidade': "Densidade Populacional", 'renda': "Renda Superior", 'renda_sup': "Superior a 30%", 'renda_nac': "Média Nacional",
-        'jovem': "Público Jovem", 'fluxo': "Fluxo de Pedestres", 'mapa_h': "Mapeamento de Unidades Atuais e Sugestões", 
-        'ia_h': "IA Strategic Insights", 'botao_ia': "Gerar Análise de Expansão Baseada no Cenário", 'aviso_csv': "Carregue o CSV para ativar o simulador.", 'tema': "Modo de Interface"
+        'jovem': "Público Jovem", 'fluxo': "Fluxo de Pedestres", 'resumo': "Resumo do Cenário Configurado",
+        'mapa_h': "Mapeamento de Unidades Atuais e Sugestões", 'ia_h': "IA Strategic Insights", 'botao_ia': "Gerar Análise de Expansão",
+        'aviso_csv': "Carregue o CSV para ativar o simulador.", 'tema': "Modo de Interface"
     },
     'EN': {
         'title': "☕ Retail Insights", 'subtitle': "Expansion Simulator - Geographic AI",
         'config': "Data Settings", 'upload': "Upload CSV", 'pais': "Country", 'estado': "State", 'cidade': "City", 'todas': "All",
         'simulador_h': "Scenario Simulator", 'densidade': "Pop. Density", 'renda': "High Income", 'renda_sup': "Above 30%", 'renda_nac': "National Average",
-        'jovem': "Young Audience", 'fluxo': "Pedestrian Flow", 'mapa_h': "Mapping and Suggestions",
-        'ia_h': "AI Strategic Insights", 'botao_ia': "Generate Analysis", 'aviso_csv': "Upload CSV to start.", 'tema': "Interface Mode"
+        'jovem': "Young Audience", 'fluxo': "Pedestrian Flow", 'resumo': "Scenario Summary",
+        'mapa_h': "Current Mapping and Suggestions", 'ia_h': "AI Strategic Insights", 'botao_ia': "Generate Analysis", 'tema': "Interface Mode"
     }
 }
 t = t_dict.get(st.session_state.lang, t_dict['PT'])
@@ -91,11 +96,8 @@ st.markdown(f"""
     .stApp {{ background-color: {bg_app} !important; color: {text_main} !important; }}
     [data-testid="stSidebar"] {{ background-color: {bg_sidebar} !important; border-right: 1px solid {border_card}; }}
     [data-testid="stVerticalBlockBorderWrapper"] {{
-        background-color: {bg_summary} !important;
-        border: 1px solid {accent} !important;
-        border-left: 8px solid {accent} !important;
-        border-radius: 12px !important;
-        padding: 25px !important;
+        background-color: {bg_summary} !important; border: 1px solid {accent} !important;
+        border-left: 8px solid {accent} !important; border-radius: 12px !important; padding: 25px !important;
     }}
     div[data-baseweb="select"] > div, div[data-baseweb="input"] > div, div[data-baseweb="base-input"] {{
         background-color: {bg_widget} !important; color: {text_main} !important; border: 1px solid {border_card} !important;
@@ -107,15 +109,16 @@ st.markdown(f"""
     .insight-card {{ background-color: {bg_card}; border-left: 4px solid {accent}; padding: 20px; border-radius: 8px; margin-bottom: 15px; border: 1px solid {border_card}; }}
     h1, h2, h3, b, strong, label {{ color: {text_main} !important; }}
     p, span, small {{ color: {text_sub} !important; }}
-    [data-testid="stFileUploader"] section {{ background-color: {bg_widget} !important; border: 1px dashed {border_card}; }}
-    .stTextInput input {{ color: {text_main} !important; background-color: {bg_widget} !important; }}
     </style>
     """, unsafe_allow_html=True)
 
-# --- CARREGAMENTO DE DADOS (EMBUTIDO + UPLOAD) ---
+# --- CARREGAMENTO DE DADOS ---
 with st.sidebar:
     st.markdown(f"### {t['title']}")
-    st.session_state.theme = st.selectbox(t['tema'], ["Dark", "Light"], index=0 if st.session_state.theme == 'Dark' else 1)
+    theme_sel = st.selectbox(t['tema'], ["Dark", "Light"], index=0 if st.session_state.theme == 'Dark' else 1)
+    if theme_sel != st.session_state.theme:
+        st.session_state.theme = theme_sel
+        st.rerun()
     st.session_state.lang_selector = st.selectbox("Language", ["Português", "English"], on_change=change_lang)
     st.markdown("---")
     uploaded_file = st.file_uploader(t['upload'], type=["csv"])
@@ -127,9 +130,21 @@ if file_to_load:
     try: df = pd.read_csv(file_to_load, encoding='utf-8')
     except: df = pd.read_csv(file_to_load, encoding='latin-1')
     
-    df.columns = [c.strip() for c in df.columns]
-    mapping = {'Latitude': 'lat', 'longitude': 'lon', 'Longitude': 'lon', 'latitude': 'lat', 'City': 'Cidade', 'Country': 'País', 'State/Province': 'Estado'}
-    df = df.rename(columns=mapping).dropna(subset=['lat', 'lon'])
+    # NORMALIZAÇÃO DE COLUNAS (Evita o KeyError)
+    df.columns = [c.strip().lower() for c in df.columns]
+    mapping = {
+        'latitude': 'lat', 'longitude': 'lon', 
+        'city': 'Cidade', 'country': 'País', 
+        'state/province': 'Estado'
+    }
+    df = df.rename(columns=mapping)
+    
+    # Verifica se as colunas essenciais existem
+    if 'lat' in df.columns and 'lon' in df.columns:
+        df = df.dropna(subset=['lat', 'lon'])
+    else:
+        st.error(f"Colunas de coordenadas não encontradas. Colunas detectadas: {list(df.columns)}")
+        st.stop()
 
     with st.sidebar:
         pais_sel = st.selectbox(t['pais'], sorted(df['País'].unique()))
@@ -145,7 +160,7 @@ if file_to_load:
     col1, col2, col3, col4 = st.columns(4)
     with col1: st.markdown(f'<div class="kpi-card-top">Lojas<br><h3>{len(df_f)}</h3></div>', unsafe_allow_html=True)
     with col2: st.markdown(f'<div class="kpi-card-top">País<br><h3>{pais_sel}</h3></div>', unsafe_allow_html=True)
-    with col3: st.markdown(f'<div class="kpi-card-top">Estados<br><h3>{len(estados)}</h3></div>', unsafe_allow_html=True)
+    with col3: st.markdown(f'<div class="kpi-card-top">Estado<br><h3>{estado_sel}</h3></div>', unsafe_allow_html=True)
     with col4: st.markdown(f'<div class="kpi-card-top">Cidades<br><h3>{len(cidades)}</h3></div>', unsafe_allow_html=True)
 
     # SIMULADOR
@@ -157,9 +172,8 @@ if file_to_load:
         with sc3: p_jovem = st.selectbox(t['jovem'], ["Baixo", "Médio", "Alto"], index=2)
         with sc4: fluxo = st.selectbox(t['fluxo'], ["Zonas Residenciais", "Centros Comerciais", "Hubs"], index=1)
     
-    txt_renda = t['renda_sup'] if renda_sup else t['renda_nac']
+    txt_renda = "Superior a 30%" if renda_sup else "Média Nacional"
 
-    # CARDS RESUMO
     st.markdown("<br>", unsafe_allow_html=True)
     i1, i2, i3, i4 = st.columns(4)
     with i1: st.markdown(f'<div class="summary-card">👥 DENSIDADE<br><b>{dens} hab/km²</b></div>', unsafe_allow_html=True)
@@ -167,7 +181,7 @@ if file_to_load:
     with i3: st.markdown(f'<div class="summary-card">👤 PÚBLICO<br><b>{p_jovem}</b></div>', unsafe_allow_html=True)
     with i4: st.markdown(f'<div class="summary-card">👣 FLUXO<br><b>{fluxo}</b></div>', unsafe_allow_html=True)
 
-    # MAPA (SOMBREADO VERDE RESTAURADO)
+    # MAPA
     st.markdown(f"<br><h3>🗺️ {t['mapa_h']}</h3>", unsafe_allow_html=True)
     m = folium.Map(location=[df_f['lat'].mean(), df_f['lon'].mean()], zoom_start=12, tiles=map_tile)
     cluster = MarkerCluster().add_to(m)
@@ -206,9 +220,9 @@ if file_to_load:
         with col_img:
             fmt = st.session_state.suggested_format
             st.markdown(f"**Design Sugerido: {fmt.title()}**")
-            st.image(STORE_IMAGES[fmt], use_container_width=True)
+            st.image(STORE_IMAGES.get(fmt, STORE_IMAGES["core"]), use_container_width=True)
         
-        # --- FORMULÁRIO DE AVALIAÇÃO ---
+        # --- FORMULÁRIO DE FEEDBACK ---
         st.divider()
         c_b1, c_b2, c_b3 = st.columns([1, 1, 1])
         with c_b2:
@@ -241,7 +255,7 @@ if file_to_load:
                             st.balloons()
                             st.session_state.show_survey = False
                             st.rerun()
-                        except Exception as e: st.error(f"Erro Banco: {e}")
+                        except Exception as e: st.error(f"Erro Supabase: {e}")
                     else: st.warning("Preencha Nome, E-mail e Contato.")
 else:
     st.info(t['aviso_csv'])
