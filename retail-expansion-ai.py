@@ -3,16 +3,21 @@ import pandas as pd
 import folium
 from streamlit_folium import st_folium
 from folium.plugins import MarkerCluster
+from streamlit_gsheets import GSheetsConnection
 import google.generativeai as genai
+import datetime
 import re
 
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(
-    page_title="Starbucks Insights",
+    page_title="Retail Insights",
     page_icon="☕",
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# --- CONFIGURAÇÃO DA CONEXÃO (Coloque isso antes do if show_survey) ---
+conn = st.connection("gsheets", type=GSheetsConnection)
 
 # --- SISTEMA DE ESTADO INICIAL ---
 if 'lang' not in st.session_state: st.session_state.lang = 'PT' 
@@ -35,7 +40,7 @@ def change_lang():
 
 t_dict = {
     'PT': {
-        'title': "☕ Starbucks Insights", 'subtitle': "Simulador de Expansão - Análise de Vazios Comerciais via IA Geográfica",
+        'title': "☕ Retail Insights", 'subtitle': "Simulador de Expansão - Análise de Vazios Comerciais via IA Geográfica",
         'config': "Configurações de Dados", 'upload': "Upload do CSV", 'pais': "País", 'estado': "Estado", 'cidade': "Cidade", 'todas': "Todas",
         'simulador_h': "Simulador de Cenários", 'simulador_info': "Ajuste os indicadores abaixo para definir o perfil da nova unidade",
         'densidade': "Densidade Populacional", 'renda': "Renda Superior", 'renda_sup': "Superior a 30%", 'renda_nac': "Média Nacional",
@@ -44,7 +49,7 @@ t_dict = {
         'aviso_csv': "Carregue o CSV para ativar o simulador.", 'aviso_key': "Por favor, insira a Gemini API Key na barra lateral.", 'tema': "Modo de Interface"
     },
     'EN': {
-        'title': "☕ Starbucks Insights", 'subtitle': "Expansion Simulator - Commercial Void Analysis via Geographic AI",
+        'title': "☕ Retail Insights", 'subtitle': "Expansion Simulator - Commercial Void Analysis via Geographic AI",
         'config': "Data Settings", 'upload': "Upload CSV", 'pais': "Country", 'estado': "State", 'cidade': "City", 'todas': "All",
         'simulador_h': "Expansion Scenario Simulator", 'simulador_info': "Adjust the indicators below to define the profile of the new unit",
         'densidade': "Population Density", 'renda': "High Income", 'renda_sup': "Above 30%", 'renda_nac': "National Average",
@@ -195,7 +200,7 @@ if uploaded_file:
                     genai.configure(api_key=gemini_key)
                     model = genai.GenerativeModel('gemini-flash-latest')
                     prompt = f"""
-                    Como consultor estratégico da Starbucks, analise a expansão em {cidade_sel}.
+                    Como consultor estratégico da varejo, analise a expansão em {cidade_sel}.
                     Atualmente existem {len(df_f)} lojas.
                     CENÁRIO: Densidade {dens}, Renda {txt_renda}, Público {p_jovem}, Fluxo {fluxo}.
                     TAREFAS:
@@ -222,79 +227,110 @@ if uploaded_file:
                     st.rerun()
                 except Exception as e: st.error(f"Erro: {e}")
 
-    if st.session_state.ai_analysis:
+if st.session_state.ai_analysis:
         st.markdown(f"### {t['ia_h']}")
         col_txt, col_img = st.columns([2, 1])
         with col_txt:
-            for section in re.split(r'\n(?=\d\.)', st.session_state.ai_analysis):
-                if section.strip(): st.markdown(f'<div class="insight-card">{section}</div>', unsafe_allow_html=True)
+            # Limpa o texto da IA de possíveis marcadores de formato antes de exibir
+            clean_analysis = re.sub(r"FORMATO:\s*[\w-]+|COORDENADAS:.*", "", st.session_state.ai_analysis, flags=re.IGNORECASE).strip()
+            st.markdown(f'<div class="insight-card">{clean_analysis}</div>', unsafe_allow_html=True)
         with col_img:
-            # Exibição da Imagem
             fmt = st.session_state.suggested_format
             st.markdown(f"**Design Sugerido: {fmt.title()}**")
             st.markdown(f'<img src="{STORE_IMAGES[fmt]}" class="store-design-img">', unsafe_allow_html=True)
             st.caption("Referência de arquitetura para o formato sugerido.")
-            # --- NOVO TRECHO: FORMULÁRIO LIKERT DE EXPERIÊNCIA DO USUÁRIO ---
-        st.markdown("<br><br>", unsafe_allow_html=True)
+        
+        # --- SEÇÃO DO FORMULÁRIO DE AVALIAÇÃO ---
         st.divider()
-        
-        # Botão de ativação do formulário
-        if 'show_survey' not in st.session_state: st.session_state.show_survey = False
-        
+
+        # 1. Inicializa o estado do formulário se não existir
+        if 'show_survey' not in st.session_state: 
+            st.session_state.show_survey = False
+
+        # 2. Botão para abrir/fechar o formulário (centralizado)
         c1, c2, c3 = st.columns([1, 1, 1])
         with c2:
-            if st.button("📊 Avaliar Experiência da Interface"):
+            if st.button("📊 Avaliar Experiência da Interface", use_container_width=True):
                 st.session_state.show_survey = not st.session_state.show_survey
+                st.rerun()
 
+        # 3. O Formulário (só aparece se o estado for True)
         if st.session_state.show_survey:
             with st.container(border=True):
                 st.markdown(f"<h3 style='text-align: center; color: {accent};'>Sua opinião é fundamental!</h3>", unsafe_allow_html=True)
-                st.markdown("<p style='text-align: center;'>Responda como foi sua experiência com esta ferramenta de análise:</p>", unsafe_allow_html=True)
                 
-                # Perguntas elaboradas sobre UX
+                # --- CAMPOS DE IDENTIFICAÇÃO ---
+                st.markdown("<h6>Informações Pessoais (Opcional)</h6>", unsafe_allow_html=True)
+                ci1, ci2 = st.columns(2)
+                with ci1:
+                    nome = st.text_input("Nome completo", key="n_srv")
+                    contato = st.text_input("Contato", key="c_srv")
+                with ci2:
+                    email = st.text_input("E-mail", key="e_srv")
+                    profissao = st.text_input("Profissão", key="p_srv")
+                st.markdown("---")
+                
+                # --- PERGUNTAS LIKERT ---
                 questions = [
                     "1. A interface é intuitiva e facilitou a configuração do seu cenário?",
                     "2. O design visual e as cores ajudaram na compreensão dos dados?",
                     "3. A análise gerada pela IA foi relevante e clara para sua estratégia?",
                     "4. O mapa interativo facilitou a visualização das novas oportunidades?"
                 ]
-                
-                # Mapeamento de níveis e emojis conforme a imagem
                 options = ["Worst", "Poor", "Average", "Good", "Excellent"]
-                emojis = {"Worst": "😠", "Poor": "😟", "Average": "😐", "Good": "🙂", "Excellent": "😄"}
-                colors = {"Worst": "#d32f2f", "Poor": "#f4511e", "Average": "#ffa000", "Good": "#afb42b", "Excellent": "#388e3c"}
+                respostas_likert = {}
 
                 for i, q in enumerate(questions):
                     st.markdown(f"**{q}**")
-                    
-                    # Slider Likert
-                    resp = st.select_slider(
-                        label=f"q_{i}",
-                        options=options,
-                        value="Average",
-                        label_visibility="collapsed",
-                        key=f"likert_question_{i}"
-                    )
-                    
-                    # Representação Visual das "Carinhas"
-                    cols = st.columns(5)
-                    for idx, opt in enumerate(options):
-                        is_selected = (resp == opt)
-                        opac = "1.0" if is_selected else "0.3"
-                        f_weight = "bold" if is_selected else "normal"
-                        curr_color = colors[opt] if is_selected else text_sub
-                        
-                        cols[idx].markdown(
-                            f"""<div style="text-align: center; opacity: {opac}; transition: 0.3s;">
-                                <span style="font-size: 24px;">{emojis[opt]}</span><br>
-                                <small style="color: {curr_color}; font-weight: {f_weight};">{opt}</small>
-                            </div>""", 
-                            unsafe_allow_html=True
-                        )
-                    st.markdown("<br>", unsafe_allow_html=True)
+                    resp = st.select_slider(f"q_label_{i}", options=options, value="Average", label_visibility="collapsed", key=f"likert_q_{i}")
+                    respostas_likert[f"Q{i+1}"] = resp
                 
-                if st.button("Enviar Avaliação"):
-                    st.success("Obrigado pelo seu feedback! Isso nos ajuda a melhorar a interface.")
+# --- BOTÃO DE ENVIO COM SERVICE ACCOUNT ---
+        if st.button("Enviar Avaliação Final", use_container_width=True):
+            if nome and email:
+                try:
+                    # O Streamlit busca automaticamente as credenciais em [connections.gsheets] nos Secrets
+                    conn = st.connection("gsheets", type=GSheetsConnection)
+                    
+                    # URL da sua planilha (use a URL limpa)
+                    url_planilha = "https://docs.google.com/spreadsheets/d/1h0nFEl08GQWHHWZzMAgto7fkXIbwPxS3WisfgAjVfKI/edit"
+                    
+                    # Prepara os dados
+                    novo_registro = {
+                        "Data": datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+                        "Nome": str(nome), 
+                        "Email": str(email), 
+                        "Contato": str(contato), 
+                        "Profissao": str(profissao),
+                        "Q1": str(respostas_likert["Q1"]), 
+                        "Q2": str(respostas_likert["Q2"]),
+                        "Q3": str(respostas_likert["Q3"]), 
+                        "Q4": str(respostas_likert["Q4"])
+                    }
+                    novo_df = pd.DataFrame([novo_registro])
+
+                    # Tenta ler a aba "Dados" (ttl=0 força a atualização)
+                    try:
+                        df_atual = conn.read(spreadsheet=url_planilha, worksheet="Dados", ttl=0)
+                    except:
+                        df_atual = pd.DataFrame() # Se falhar, cria um vazio
+
+                    # Junta os dados
+                    df_final = pd.concat([df_atual, novo_df], ignore_index=True)
+                    
+                    # GRAVA NA PLANILHA (Agora com permissão da Service Account)
+                    conn.update(spreadsheet=url_planilha, data=df_final, worksheet="Dados")
+
+                    st.success(f"✅ Feedback enviado! Obrigado, {nome}.")
                     st.balloons()
+                    st.session_state.show_survey = False
+                    st.rerun()
+
+                except Exception as e:
+                    st.error(f"Erro ao salvar: {e}")
+                    st.info("Dica: Verifique se o e-mail da Service Account foi adicionado como EDITOR na planilha.")
+            else:
+                st.warning("Por favor, preencha o Nome e o E-mail.")
+
 else:
     st.info(t['aviso_csv'])
