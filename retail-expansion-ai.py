@@ -3,10 +3,11 @@ import pandas as pd
 import folium
 from streamlit_folium import st_folium
 from folium.plugins import MarkerCluster
-from streamlit_gsheets import GSheetsConnection
+from supabase import create_client, Client
 import google.generativeai as genai
 import datetime
 import re
+import os
 
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(
@@ -16,23 +17,40 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- CONFIGURAÇÃO DA CONEXÃO (Coloque isso antes do if show_survey) ---
-conn = st.connection("gsheets", type=GSheetsConnection)
+# --- CONFIGURAÇÃO SUPABASE ---
+url: str = st.secrets["SUPABASE_URL"]
+key: str = st.secrets["SUPABASE_KEY"]
+supabase: Client = create_client(url, key)
 
 # --- SISTEMA DE ESTADO INICIAL ---
 if 'lang' not in st.session_state: st.session_state.lang = 'PT' 
 if 'theme' not in st.session_state: st.session_state.theme = 'Light' 
 if 'ai_analysis' not in st.session_state: st.session_state.ai_analysis = None
 if 'expansion_coords' not in st.session_state: st.session_state.expansion_coords = []
-if 'suggested_format' not in st.session_state: st.session_state.suggested_format = "Core"
+if 'suggested_format' not in st.session_state: st.session_state.suggested_format = "core"
+if 'show_survey' not in st.session_state: st.session_state.show_survey = False
 
-# Banco de Imagens de Arquitetura (URLs estáveis)
+# Banco de Imagens
 STORE_IMAGES = {
     "drive-thru": "https://images.unsplash.com/photo-1600093463592-8e36ae95ef56?q=80&w=1000&auto=format&fit=crop",
     "flagship": "https://images.unsplash.com/photo-1554118811-1e0d58224f24?q=80&w=1000&auto=format&fit=crop",
     "quiosque": "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?q=80&w=1000&auto=format&fit=crop",
     "core": "https://images.unsplash.com/photo-1501339817302-4448f9958e74?q=80&w=1000&auto=format&fit=crop"
 }
+
+# --- FUNÇÃO DE CACHE DA IA (Evita erro 429 e economiza cota) ---
+@st.cache_data(show_spinner=False)
+def obter_analise_ia(api_key, cidade, num_lojas, densidade, renda, publico, fluxo):
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel('gemini-flash-latest')
+    prompt = f"""
+    Consultor estratégico: analise expansão em {cidade}. Lojas atuais: {num_lojas}. 
+    Cenário: Densidade {densidade}, Renda {renda}, Público {publico}, Fluxo {fluxo}. 
+    Identifique 2 áreas reais. Sugira formato: Drive-thru, Flagship, Quiosque ou Core. 
+    Finalize com: FORMATO: [Nome] e COORDENADAS: [LAT, LON, NOME]; [LAT, LON, NOME]
+    """
+    response = model.generate_content(prompt)
+    return response.text
 
 def change_lang():
     mapping = {"Português": 'PT', "English": 'EN'}
@@ -42,101 +60,72 @@ t_dict = {
     'PT': {
         'title': "☕ Retail Insights", 'subtitle': "Simulador de Expansão - Análise de Vazios Comerciais via IA Geográfica",
         'config': "Configurações de Dados", 'upload': "Upload do CSV", 'pais': "País", 'estado': "Estado", 'cidade': "Cidade", 'todas': "Todas",
-        'simulador_h': "Simulador de Cenários", 'simulador_info': "Ajuste os indicadores abaixo para definir o perfil da nova unidade",
-        'densidade': "Densidade Populacional", 'renda': "Renda Superior", 'renda_sup': "Superior a 30%", 'renda_nac': "Média Nacional",
-        'jovem': "Público Jovem", 'fluxo': "Fluxo de Pedestres", 'resumo': "Resumo do Cenário Configurado",
-        'mapa_h': "Mapeamento de Unidades Atuais e Sugestões", 'ia_h': "IA Strategic Insights", 'botao_ia': "Gerar Análise de Expansão Baseada no Cenário",
-        'aviso_csv': "Carregue o CSV para ativar o simulador.", 'aviso_key': "Por favor, insira a Gemini API Key na barra lateral.", 'tema': "Modo de Interface"
+        'simulador_h': "Simulador de Cenários", 'densidade': "Densidade Populacional", 'renda': "Renda Superior", 'renda_sup': "Superior a 30%", 'renda_nac': "Média Nacional",
+        'jovem': "Público Jovem", 'fluxo': "Fluxo de Pedestres", 'mapa_h': "Mapeamento de Unidades Atuais e Sugestões", 
+        'ia_h': "IA Strategic Insights", 'botao_ia': "Gerar Análise de Expansão Baseada no Cenário", 'aviso_csv': "Carregue o CSV para ativar o simulador.", 'tema': "Modo de Interface"
     },
     'EN': {
-        'title': "☕ Retail Insights", 'subtitle': "Expansion Simulator - Commercial Void Analysis via Geographic AI",
+        'title': "☕ Retail Insights", 'subtitle': "Expansion Simulator - Geographic AI",
         'config': "Data Settings", 'upload': "Upload CSV", 'pais': "Country", 'estado': "State", 'cidade': "City", 'todas': "All",
-        'simulador_h': "Expansion Scenario Simulator", 'simulador_info': "Adjust the indicators below to define the profile of the new unit",
-        'densidade': "Population Density", 'renda': "High Income", 'renda_sup': "Above 30%", 'renda_nac': "National Average",
-        'jovem': "Young Audience", 'fluxo': "Pedestrian Flow", 'resumo': "Configured Scenario Summary",
-        'mapa_h': "Current Units Mapping and Suggestions", 'ia_h': "AI Strategic Insights", 'botao_ia': "Generate Expansion Analysis Based on Scenario",
-        'aviso_csv': "Upload CSV to activate the simulator.", 'aviso_key': "Please enter the Gemini API Key in the sidebar.", 'tema': "Interface Mode"
+        'simulador_h': "Scenario Simulator", 'densidade': "Pop. Density", 'renda': "High Income", 'renda_sup': "Above 30%", 'renda_nac': "National Average",
+        'jovem': "Young Audience", 'fluxo': "Pedestrian Flow", 'mapa_h': "Mapping and Suggestions",
+        'ia_h': "AI Strategic Insights", 'botao_ia': "Generate Analysis", 'aviso_csv': "Upload CSV to start.", 'tema': "Interface Mode"
     }
 }
 t = t_dict.get(st.session_state.lang, t_dict['PT'])
 
-# --- CORES ---
+# --- CORES E CSS ---
 if st.session_state.theme == 'Dark':
     bg_app, bg_sidebar, bg_card, bg_widget = "#050505", "#0a0a0a", "#0d1310", "#111b17"
     border_card, text_main, text_sub = "#142b20", "#ffffff", "#888888"
     accent, bg_summary = "#00ff88", "rgba(0, 255, 136, 0.08)"
     map_tile, btn_text = "cartodbdark_matter", "#000000"
 else:
-    bg_app, bg_sidebar, bg_card, bg_widget = "#f8f9fa", "#ffffff", "#ffffff", "#ffffff"
+    bg_app, bg_sidebar, bg_card, bg_widget = "#f8f9fa", "#ffffff", "#ffffff", "#f0f2f6"
     border_card, text_main, text_sub = "#dee2e6", "#1e3d33", "#495057"
-    accent, bg_summary = "#00704A", "rgba(0, 112, 74, 0.08)"
+    accent, bg_summary = "#00704A", "rgba(0, 112, 74, 0.05)"
     map_tile, btn_text = "cartodbpositron", "#ffffff"
 
-# --- CSS ---
 st.markdown(f"""
     <style>
     .stApp {{ background-color: {bg_app} !important; color: {text_main} !important; }}
     [data-testid="stSidebar"] {{ background-color: {bg_sidebar} !important; border-right: 1px solid {border_card}; }}
-    
-    /* CONTAINER SIMULADOR - VERDE FLUORESCENTE */
     [data-testid="stVerticalBlockBorderWrapper"] {{
-        background-color: rgba(0, 255, 136, 0.1) !important;
-        border: 1px solid #00ff88 !important;
-        border-left: 8px solid #00ff88 !important;
+        background-color: {bg_summary} !important;
+        border: 1px solid {accent} !important;
+        border-left: 8px solid {accent} !important;
         border-radius: 12px !important;
         padding: 25px !important;
     }}
-
-    /* WIDGETS LIGHT MODE */
-    div[data-baseweb="select"] > div, div[data-baseweb="input"] > div, [data-testid="stFileUploader"] section {{
-        background-color: {bg_widget} !important;
-        color: {text_main} !important;
-        border: 1px solid {border_card} !important;
+    div[data-baseweb="select"] > div, div[data-baseweb="input"] > div, div[data-baseweb="base-input"] {{
+        background-color: {bg_widget} !important; color: {text_main} !important; border: 1px solid {border_card} !important;
     }}
-    [data-testid="stFileUploader"] button, .stTextInput input {{
-        background-color: #ffffff !important; color: #1e3d33 !important; border: 1px solid #dee2e6 !important;
-    }}
-
-    /* BOTAO PRINCIPAL */
-    .stButton > button {{
-        background-color: {accent} !important; color: {btn_text} !important;
-        font-weight: 600 !important; width: 100%; border: none !important;
-    }}
-
-    /* CARDS */
-    .kpi-card-top {{ background-color: {bg_card} !important; border: 1px solid {border_card} !important; border-radius: 12px !important; padding: 25px !important; margin-bottom: 15px !important; }}
-    .summary-card {{ background-color: {bg_summary} !important; border: 1px solid {accent} !important; border-left: 5px solid {accent} !important; border-radius: 12px !important; padding: 15px; display: flex; align-items: center; gap: 15px; }}
-    
-    /* IMAGEM DESIGN */
+    .stButton > button {{ background-color: {accent} !important; color: {btn_text} !important; font-weight: 600 !important; width: 100%; border: none !important; }}
+    .kpi-card-top {{ background-color: {bg_card} !important; border: 1px solid {border_card} !important; border-radius: 12px !important; padding: 20px !important; height: 120px; display: flex; flex-direction: column; justify-content: center; }}
+    .summary-card {{ background-color: {bg_summary} !important; border: 1px solid {accent} !important; border-left: 5px solid {accent} !important; border-radius: 12px !important; padding: 15px; height: 100px; display: flex; align-items: center; gap: 15px; }}
     .store-design-img {{ width: 100%; border-radius: 12px; border: 4px solid {accent}; margin-bottom: 10px; }}
     .insight-card {{ background-color: {bg_card}; border-left: 4px solid {accent}; padding: 20px; border-radius: 8px; margin-bottom: 15px; border: 1px solid {border_card}; }}
-
-    h1, h2, h3, b, strong {{ color: {text_main} !important; }}
-    p, label, span, small {{ color: {text_sub} !important; }}
+    h1, h2, h3, b, strong, label {{ color: {text_main} !important; }}
+    p, span, small {{ color: {text_sub} !important; }}
+    [data-testid="stFileUploader"] section {{ background-color: {bg_widget} !important; border: 1px dashed {border_card}; }}
+    .stTextInput input {{ color: {text_main} !important; background-color: {bg_widget} !important; }}
     </style>
     """, unsafe_allow_html=True)
 
-# --- SIDEBAR ---
+# --- CARREGAMENTO DE DADOS (EMBUTIDO + UPLOAD) ---
 with st.sidebar:
     st.markdown(f"### {t['title']}")
-    theme_sel = st.selectbox(t['tema'], ["Dark", "Light"], index=0 if st.session_state.theme == 'Dark' else 1)
-    if theme_sel != st.session_state.theme:
-        st.session_state.theme = theme_sel
-        st.rerun()
+    st.session_state.theme = st.selectbox(t['tema'], ["Dark", "Light"], index=0 if st.session_state.theme == 'Dark' else 1)
     st.session_state.lang_selector = st.selectbox("Language", ["Português", "English"], on_change=change_lang)
     st.markdown("---")
     uploaded_file = st.file_uploader(t['upload'], type=["csv"])
-    gemini_key = st.text_input("Gemini API Key", type="password")
 
-# --- CONTEÚDO ---
-st.title(t['title'])
-st.markdown(f"<p>{t['subtitle']}</p>", unsafe_allow_html=True)
+DEFAULT_CSV = "Starbucks Store Locations.csv"
+file_to_load = uploaded_file if uploaded_file else (DEFAULT_CSV if os.path.exists(DEFAULT_CSV) else None)
 
-if uploaded_file:
-    try: df = pd.read_csv(uploaded_file, encoding='utf-8')
-    except: 
-        uploaded_file.seek(0)
-        df = pd.read_csv(uploaded_file, encoding='latin-1')
+if file_to_load:
+    try: df = pd.read_csv(file_to_load, encoding='utf-8')
+    except: df = pd.read_csv(file_to_load, encoding='latin-1')
     
     df.columns = [c.strip() for c in df.columns]
     mapping = {'Latitude': 'lat', 'longitude': 'lon', 'Longitude': 'lon', 'latitude': 'lat', 'City': 'Cidade', 'Country': 'País', 'State/Province': 'Estado'}
@@ -178,7 +167,7 @@ if uploaded_file:
     with i3: st.markdown(f'<div class="summary-card">👤 PÚBLICO<br><b>{p_jovem}</b></div>', unsafe_allow_html=True)
     with i4: st.markdown(f'<div class="summary-card">👣 FLUXO<br><b>{fluxo}</b></div>', unsafe_allow_html=True)
 
-    # MAPA
+    # MAPA (SOMBREADO VERDE RESTAURADO)
     st.markdown(f"<br><h3>🗺️ {t['mapa_h']}</h3>", unsafe_allow_html=True)
     m = folium.Map(location=[df_f['lat'].mean(), df_f['lon'].mean()], zoom_start=12, tiles=map_tile)
     cluster = MarkerCluster().add_to(m)
@@ -193,144 +182,66 @@ if uploaded_file:
     # IA ACTION
     st.divider()
     if st.button(t['botao_ia']):
-        if not gemini_key: st.warning(t['aviso_key'])
+        api_key = st.secrets.get("GEMINI_API_KEY")
+        if not api_key: st.error("Configure a GEMINI_API_KEY nos Secrets.")
         else:
-            with st.spinner("IA processando cenário estratégico..."):
+            with st.spinner("IA processando estratégia..."):
                 try:
-                    genai.configure(api_key=gemini_key)
-                    model = genai.GenerativeModel('gemini-flash-latest')
-                    prompt = f"""
-                    Como consultor estratégico da varejo, analise a expansão em {cidade_sel}.
-                    Atualmente existem {len(df_f)} lojas.
-                    CENÁRIO: Densidade {dens}, Renda {txt_renda}, Público {p_jovem}, Fluxo {fluxo}.
-                    TAREFAS:
-                    - Identifique 2 áreas reais que deem match.
-                    - Explique por que esses KPIs são cruciais.
-                    - Sugira UM formato entre: Drive-thru, Flagship, Quiosque ou Core.
-                    - No final, inclua obrigatoriamente: FORMATO: [Nome] e COORDENADAS: [LAT, LON, NOME]; [LAT, LON, NOME]
-                    """
-                    response = model.generate_content(prompt)
-                    st.session_state.ai_analysis = response.text
-                    
-                    # Extração de Coordenadas
-                    match_c = re.findall(r"\[([-+]?\d*\.\d+|\d+),\s*([-+]?\d*\.\d+|\d+),\s*([^\]]+)\]", response.text)
+                    res_ia = obter_analise_ia(api_key, cidade_sel, len(df_f), dens, txt_renda, p_jovem, fluxo)
+                    st.session_state.ai_analysis = res_ia
+                    match_c = re.findall(r"\[([-+]?\d*\.\d+|\d+),\s*([-+]?\d*\.\d+|\d+),\s*([^\]]+)\]", res_ia)
                     st.session_state.expansion_coords = [{'lat': float(m[0]), 'lon': float(m[1]), 'name': m[2]} for m in match_c]
-                    
-                    # Extração de Formato (Melhorada com Regex para hífen e Case Insensitive)
-                    match_f = re.search(r"FORMATO:\s*([\w-]+)", response.text, re.IGNORECASE)
-                    if match_f:
-                        fmt_key = match_f.group(1).lower()
-                        st.session_state.suggested_format = fmt_key if fmt_key in STORE_IMAGES else "core"
-                    else:
-                        st.session_state.suggested_format = "core"
-                    
+                    match_f = re.search(r"FORMATO:\s*([\w-]+)", res_ia, re.IGNORECASE)
+                    st.session_state.suggested_format = match_f.group(1).lower() if match_f and match_f.group(1).lower() in STORE_IMAGES else "core"
                     st.rerun()
-                except Exception as e: st.error(f"Erro: {e}")
+                except Exception as e: st.error(f"Erro IA: {e}")
 
-if st.session_state.ai_analysis:
+    # EXIBIÇÃO RESULTADO IA
+    if st.session_state.ai_analysis:
         st.markdown(f"### {t['ia_h']}")
         col_txt, col_img = st.columns([2, 1])
         with col_txt:
-            # Limpa o texto da IA de possíveis marcadores de formato antes de exibir
-            clean_analysis = re.sub(r"FORMATO:\s*[\w-]+|COORDENADAS:.*", "", st.session_state.ai_analysis, flags=re.IGNORECASE).strip()
-            st.markdown(f'<div class="insight-card">{clean_analysis}</div>', unsafe_allow_html=True)
+            clean_ia = re.sub(r"FORMATO:.*|COORDENADAS:.*", "", st.session_state.ai_analysis, flags=re.S).strip()
+            st.markdown(f'<div class="insight-card">{clean_ia}</div>', unsafe_allow_html=True)
         with col_img:
             fmt = st.session_state.suggested_format
             st.markdown(f"**Design Sugerido: {fmt.title()}**")
-            st.markdown(f'<img src="{STORE_IMAGES[fmt]}" class="store-design-img">', unsafe_allow_html=True)
-            st.caption("Referência de arquitetura para o formato sugerido.")
+            st.image(STORE_IMAGES[fmt], use_container_width=True)
         
-        # --- SEÇÃO DO FORMULÁRIO DE AVALIAÇÃO ---
+        # --- FORMULÁRIO DE AVALIAÇÃO ---
         st.divider()
-
-        # 1. Inicializa o estado do formulário se não existir
-        if 'show_survey' not in st.session_state: 
-            st.session_state.show_survey = False
-
-        # 2. Botão para abrir/fechar o formulário (centralizado)
-        c1, c2, c3 = st.columns([1, 1, 1])
-        with c2:
+        c_b1, c_b2, c_b3 = st.columns([1, 1, 1])
+        with c_b2:
             if st.button("📊 Avaliar Experiência da Interface", use_container_width=True):
                 st.session_state.show_survey = not st.session_state.show_survey
                 st.rerun()
 
-        # 3. O Formulário (só aparece se o estado for True)
         if st.session_state.show_survey:
             with st.container(border=True):
-                st.markdown(f"<h3 style='text-align: center; color: {accent};'>Sua opinião é fundamental!</h3>", unsafe_allow_html=True)
-                
-                # --- CAMPOS DE IDENTIFICAÇÃO ---
-                st.markdown("<h6>Informações Pessoais (Opcional)</h6>", unsafe_allow_html=True)
+                st.markdown(f"### Sua opinião é fundamental!")
                 ci1, ci2 = st.columns(2)
-                with ci1:
-                    nome = st.text_input("Nome completo", key="n_srv")
-                    contato = st.text_input("Contato", key="c_srv")
-                with ci2:
-                    email = st.text_input("E-mail", key="e_srv")
-                    profissao = st.text_input("Profissão", key="p_srv")
-                st.markdown("---")
+                nome = ci1.text_input("Nome completo", key="n_srv")
+                contato = ci1.text_input("Contato", key="c_srv")
+                email = ci2.text_input("E-mail", key="e_srv")
+                profissao = ci2.text_input("Profissão", key="p_srv")
                 
-                # --- PERGUNTAS LIKERT ---
-                questions = [
-                    "1. A interface é intuitiva e facilitou a configuração do seu cenário?",
-                    "2. O design visual e as cores ajudaram na compreensão dos dados?",
-                    "3. A análise gerada pela IA foi relevante e clara para sua estratégia?",
-                    "4. O mapa interativo facilitou a visualização das novas oportunidades?"
-                ]
-                options = ["Worst", "Poor", "Average", "Good", "Excellent"]
-                respostas_likert = {}
-
+                res_likert = {}
+                questions = ["A interface é intuitiva?", "O design visual ajudou?", "A IA foi relevante?", "O mapa ajudou?"]
                 for i, q in enumerate(questions):
-                    st.markdown(f"**{q}**")
-                    resp = st.select_slider(f"q_label_{i}", options=options, value="Average", label_visibility="collapsed", key=f"likert_q_{i}")
-                    respostas_likert[f"Q{i+1}"] = resp
-                
-# --- BOTÃO DE ENVIO COM SERVICE ACCOUNT ---
-        if st.button("Enviar Avaliação Final", use_container_width=True):
-            if nome and email:
-                try:
-                    # O Streamlit busca automaticamente as credenciais em [connections.gsheets] nos Secrets
-                    conn = st.connection("gsheets", type=GSheetsConnection)
-                    
-                    # URL da sua planilha (use a URL limpa)
-                    url_planilha = "https://docs.google.com/spreadsheets/d/1h0nFEl08GQWHHWZzMAgto7fkXIbwPxS3WisfgAjVfKI/edit"
-                    
-                    # Prepara os dados
-                    novo_registro = {
-                        "Data": datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
-                        "Nome": str(nome), 
-                        "Email": str(email), 
-                        "Contato": str(contato), 
-                        "Profissao": str(profissao),
-                        "Q1": str(respostas_likert["Q1"]), 
-                        "Q2": str(respostas_likert["Q2"]),
-                        "Q3": str(respostas_likert["Q3"]), 
-                        "Q4": str(respostas_likert["Q4"])
-                    }
-                    novo_df = pd.DataFrame([novo_registro])
+                    res_likert[f"Q{i+1}"] = st.select_slider(q, options=["Worst", "Poor", "Average", "Good", "Excellent"], value="Average", key=f"lk_{i}")
 
-                    # Tenta ler a aba "Dados" (ttl=0 força a atualização)
-                    try:
-                        df_atual = conn.read(spreadsheet=url_planilha, worksheet="Dados", ttl=0)
-                    except:
-                        df_atual = pd.DataFrame() # Se falhar, cria um vazio
-
-                    # Junta os dados
-                    df_final = pd.concat([df_atual, novo_df], ignore_index=True)
-                    
-                    # GRAVA NA PLANILHA (Agora com permissão da Service Account)
-                    conn.update(spreadsheet=url_planilha, data=df_final, worksheet="Dados")
-
-                    st.success(f"✅ Feedback enviado! Obrigado, {nome}.")
-                    st.balloons()
-                    st.session_state.show_survey = False
-                    st.rerun()
-
-                except Exception as e:
-                    st.error(f"Erro ao salvar: {e}")
-                    st.info("Dica: Verifique se o e-mail da Service Account foi adicionado como EDITOR na planilha.")
-            else:
-                st.warning("Por favor, preencha o Nome e o E-mail.")
-
+                if st.button("Enviar Avaliação Final", use_container_width=True):
+                    if nome and email and contato:
+                        try:
+                            contato_num = int(re.sub(r'\D', '', contato))
+                            dados = {"nome": nome, "email": email, "contato": contato_num, "profissao": profissao, 
+                                     "q1": res_likert["Q1"], "q2": res_likert["Q2"], "q3": res_likert["Q3"], "q4": res_likert["Q4"]}
+                            supabase.table("respostas").insert(dados).execute()
+                            st.success(f"✅ Obrigado, {nome}!")
+                            st.balloons()
+                            st.session_state.show_survey = False
+                            st.rerun()
+                        except Exception as e: st.error(f"Erro Banco: {e}")
+                    else: st.warning("Preencha Nome, E-mail e Contato.")
 else:
     st.info(t['aviso_csv'])
