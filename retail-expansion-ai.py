@@ -84,30 +84,71 @@ else:
     accent, bg_summary = "#00704A", "rgba(0, 112, 74, 0.05)"
     map_tile, btn_text = "cartodbpositron", "#ffffff"
 
+# --- CSS PERSONALIZADO (VERSÃO FINAL COM LETRAS BRANCAS NOS BOTÕES) ---
 st.markdown(f"""
     <style>
     .stApp {{ background-color: {bg_app} !important; color: {text_main} !important; }}
     [data-testid="stSidebar"] {{ background-color: {bg_sidebar} !important; border-right: 1px solid {border_card}; }}
     
-    header[data-testid="stHeader"] {{ background-color: {bg_app} !important; color: {text_main} !important; }}
+    /* CORREÇÃO DOS BOTÕES - FORÇANDO BRANCO EM TUDO */
+    div.stButton > button {{
+        background-color: {accent} !important;
+        color: #FFFFFF !important;
+        border: none !important;
+        font-weight: 700 !important;
+        width: 100%;
+        border-radius: 8px;
+    }}
 
-    [data-testid="stFileUploader"] section {{ background-color: {bg_widget} !important; border: 1px dashed {border_card} !important; color: {text_main} !important; }}
-    [data-testid="stFileUploader"] button {{ background-color: {bg_app} !important; color: {text_main} !important; border: 1px solid {border_card} !important; }}
+    /* Garante que textos internos (tags p ou span) também fiquem brancos */
+    div.stButton > button p, div.stButton > button span, div.stButton > button div {{
+        color: #FFFFFF !important;
+    }}
 
-    div[data-baseweb="select"] > div, div[data-baseweb="input"] > div, div[data-baseweb="base-input"] {{
-        background-color: {bg_widget} !important; color: {text_main} !important; border: 1px solid {border_card} !important;
+    /* Mantém as letras brancas ao passar o mouse ou clicar */
+    div.stButton > button:hover, div.stButton > button:active, div.stButton > button:focus {{
+        color: #FFFFFF !important;
+        background-color: {accent} !important;
+        opacity: 0.92;
+    }}
+
+    /* Correção da Toolbar e Toolbar Header */
+    header[data-testid="stHeader"] {{
+        background-color: {bg_app} !important;
+        color: {text_main} !important;
+    }}
+
+    /* Correção do File Uploader e botão 'Browse files' */
+    [data-testid="stFileUploader"] section {{
+        background-color: {bg_widget} !important;
+        border: 1px dashed {border_card} !important;
+        color: {text_main} !important;
+    }}
+    [data-testid="stFileUploader"] button {{
+        background-color: {bg_app} !important;
+        color: {text_main} !important;
+        border: 1px solid {border_card} !important;
+    }}
+
+    /* Correção campos de seleção e inputs */
+    div[data-baseweb="select"] > div, 
+    div[data-baseweb="input"] > div, 
+    div[data-baseweb="base-input"] {{
+        background-color: {bg_widget} !important;
+        color: {text_main} !important;
+        border: 1px solid {border_card} !important;
     }}
 
     [data-testid="stVerticalBlockBorderWrapper"] {{
-        background-color: {bg_summary} !important; border: 1px solid {accent} !important;
-        border-left: 8px solid {accent} !important; border-radius: 12px !important; padding: 25px !important;
+        background-color: {bg_summary} !important;
+        border: 1px solid {accent} !important;
+        border-left: 8px solid {accent} !important;
+        border-radius: 12px !important;
+        padding: 25px !important;
     }}
-
-    .stButton > button {{ background-color: {accent} !important; color: #ffffff !important; font-weight: 700 !important; width: 100%; border: none !important; }}
 
     .kpi-card-top {{ background-color: {bg_card} !important; border: 1px solid {border_card} !important; border-radius: 12px !important; padding: 20px !important; height: 120px; display: flex; flex-direction: column; justify-content: center; }}
     .summary-card {{ background-color: {bg_summary} !important; border: 1px solid {accent} !important; border-left: 5px solid {accent} !important; border-radius: 12px !important; padding: 15px; height: 100px; display: flex; align-items: center; gap: 15px; }}
-    .store-design-img {{ width: 100%; border-radius: 12px; border: 4px solid {accent}; margin-bottom: 10px; }}
     .insight-card {{ background-color: {bg_card}; border-left: 4px solid {accent}; padding: 20px; border-radius: 8px; margin-bottom: 15px; border: 1px solid {border_card}; }}
 
     h1, h2, h3, b, strong, label {{ color: {text_main} !important; }}
@@ -115,7 +156,6 @@ st.markdown(f"""
     [data-testid="stFileUploader"] p, [data-testid="stFileUploader"] small {{ color: {text_main} !important; }}
     </style>
     """, unsafe_allow_html=True)
-
 # --- SIDEBAR ---
 with st.sidebar:
     st.markdown(f"### {t['title']}")
