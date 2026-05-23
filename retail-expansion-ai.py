@@ -18,13 +18,9 @@ st.set_page_config(
 )
 
 # --- CONFIGURAÇÃO SUPABASE ---
-# Certifique-se que SUPABASE_URL e SUPABASE_KEY estão nos Secrets do Streamlit Cloud
-try:
-    url: str = st.secrets["SUPABASE_URL"]
-    key: str = st.secrets["SUPABASE_KEY"]
-    supabase: Client = create_client(url, key)
-except Exception as e:
-    st.error("Erro nas credenciais do Supabase. Verifique os Secrets.")
+url: str = st.secrets["SUPABASE_URL"]
+key: str = st.secrets["SUPABASE_KEY"]
+supabase: Client = create_client(url, key)
 
 # --- SISTEMA DE ESTADO INICIAL ---
 if 'lang' not in st.session_state: st.session_state.lang = 'PT' 
@@ -45,14 +41,9 @@ STORE_IMAGES = {
 @st.cache_data(show_spinner=False)
 def obter_analise_ia(api_key, cidade, num_lojas, densidade, renda, publico, fluxo):
     genai.configure(api_key=api_key)
-    # Usando gemini-1.5-flash ou gemini-pro (mais estável)
-    model = genai.GenerativeModel('gemini-1.5-flash')
-    prompt = f"""
-    Consultor estratégico: analise expansão em {cidade}. Lojas atuais: {num_lojas}. 
-    Cenário: Densidade {densidade}, Renda {renda}, Público {publico}, Fluxo {fluxo}. 
-    Identifique 2 áreas reais. Sugira formato: Drive-thru, Flagship, Quiosque ou Core. 
-    Finalize com: FORMATO: [Nome] e COORDENADAS: [LAT, LON, NOME]; [LAT, LON, NOME]
-    """
+    # ALTERADO PARA O MODELO COM MAIOR COTA (500 RPD)
+    model = genai.GenerativeModel('gemini-3.1-flash-lite')
+    prompt = f"Consultor estratégico: analise expansão em {cidade}. Lojas atuais: {num_lojas}. Cenário: Densidade {densidade}, Renda {renda}, Público {publico}, Fluxo {fluxo}. Identifique 2 áreas reais. Sugira formato: Drive-thru, Flagship, Quiosque ou Core. Finalize com: FORMATO: [Nome] e COORDENADAS: [LAT, LON, NOME]; [LAT, LON, NOME]"
     response = model.generate_content(prompt)
     return response.text
 
@@ -67,14 +58,16 @@ t_dict = {
         'simulador_h': "Simulador de Cenários", 'densidade': "Densidade Populacional", 'renda': "Renda Superior", 'renda_sup': "Superior a 30%", 'renda_nac': "Média Nacional",
         'jovem': "Público Jovem", 'fluxo': "Fluxo de Pedestres", 'resumo': "Resumo do Cenário Configurado",
         'mapa_h': "Mapeamento de Unidades Atuais e Sugestões", 'ia_h': "IA Strategic Insights", 'botao_ia': "Gerar Análise de Expansão",
-        'aviso_csv': "Carregue o CSV para ativar o simulador.", 'tema': "Modo de Interface"
+        'aviso_csv': "Carregue o CSV para ativar o simulador.", 'tema': "Modo de Interface",
+        'likert_opts': ["Péssimo", "Ruim", "Médio", "Bom", "Excelente"]
     },
     'EN': {
         'title': "☕ Retail Insights", 'subtitle': "Expansion Simulator - Geographic AI",
         'config': "Data Settings", 'upload': "Upload CSV", 'pais': "Country", 'estado': "State", 'cidade': "City", 'todas': "All",
         'simulador_h': "Scenario Simulator", 'densidade': "Pop. Density", 'renda': "High Income", 'renda_sup': "Above 30%", 'renda_nac': "National Average",
         'jovem': "Young Audience", 'fluxo': "Pedestrian Flow", 'resumo': "Scenario Summary",
-        'mapa_h': "Current Mapping and Suggestions", 'ia_h': "AI Strategic Insights", 'botao_ia': "Generate Analysis", 'tema': "Interface Mode"
+        'mapa_h': "Current Mapping and Suggestions", 'ia_h': "AI Strategic Insights", 'botao_ia': "Generate Analysis", 'tema': "Interface Mode",
+        'likert_opts': ["Worst", "Poor", "Average", "Good", "Excellent"]
     }
 }
 t = t_dict.get(st.session_state.lang, t_dict['PT'])
@@ -84,7 +77,7 @@ if st.session_state.theme == 'Dark':
     bg_app, bg_sidebar, bg_card, bg_widget = "#050505", "#0a0a0a", "#0d1310", "#111b17"
     border_card, text_main, text_sub = "#142b20", "#ffffff", "#888888"
     accent, bg_summary = "#00ff88", "rgba(0, 255, 136, 0.08)"
-    map_tile, btn_text = "cartodbdark_matter", "#000000"
+    map_tile, btn_text = "cartodbdark_matter", "#ffffff"
 else:
     bg_app, bg_sidebar, bg_card, bg_widget = "#f8f9fa", "#ffffff", "#ffffff", "#f0f2f6"
     border_card, text_main, text_sub = "#dee2e6", "#1e3d33", "#495057"
@@ -95,24 +88,35 @@ st.markdown(f"""
     <style>
     .stApp {{ background-color: {bg_app} !important; color: {text_main} !important; }}
     [data-testid="stSidebar"] {{ background-color: {bg_sidebar} !important; border-right: 1px solid {border_card}; }}
+    
+    header[data-testid="stHeader"] {{ background-color: {bg_app} !important; color: {text_main} !important; }}
+
+    [data-testid="stFileUploader"] section {{ background-color: {bg_widget} !important; border: 1px dashed {border_card} !important; color: {text_main} !important; }}
+    [data-testid="stFileUploader"] button {{ background-color: {bg_app} !important; color: {text_main} !important; border: 1px solid {border_card} !important; }}
+
+    div[data-baseweb="select"] > div, div[data-baseweb="input"] > div, div[data-baseweb="base-input"] {{
+        background-color: {bg_widget} !important; color: {text_main} !important; border: 1px solid {border_card} !important;
+    }}
+
     [data-testid="stVerticalBlockBorderWrapper"] {{
         background-color: {bg_summary} !important; border: 1px solid {accent} !important;
         border-left: 8px solid {accent} !important; border-radius: 12px !important; padding: 25px !important;
     }}
-    div[data-baseweb="select"] > div, div[data-baseweb="input"] > div, div[data-baseweb="base-input"] {{
-        background-color: {bg_widget} !important; color: {text_main} !important; border: 1px solid {border_card} !important;
-    }}
-    .stButton > button {{ background-color: {accent} !important; color: {btn_text} !important; font-weight: 600 !important; width: 100%; border: none !important; }}
+
+    .stButton > button {{ background-color: {accent} !important; color: #ffffff !important; font-weight: 700 !important; width: 100%; border: none !important; }}
+
     .kpi-card-top {{ background-color: {bg_card} !important; border: 1px solid {border_card} !important; border-radius: 12px !important; padding: 20px !important; height: 120px; display: flex; flex-direction: column; justify-content: center; }}
     .summary-card {{ background-color: {bg_summary} !important; border: 1px solid {accent} !important; border-left: 5px solid {accent} !important; border-radius: 12px !important; padding: 15px; height: 100px; display: flex; align-items: center; gap: 15px; }}
     .store-design-img {{ width: 100%; border-radius: 12px; border: 4px solid {accent}; margin-bottom: 10px; }}
     .insight-card {{ background-color: {bg_card}; border-left: 4px solid {accent}; padding: 20px; border-radius: 8px; margin-bottom: 15px; border: 1px solid {border_card}; }}
+
     h1, h2, h3, b, strong, label {{ color: {text_main} !important; }}
     p, span, small {{ color: {text_sub} !important; }}
+    [data-testid="stFileUploader"] p, [data-testid="stFileUploader"] small {{ color: {text_main} !important; }}
     </style>
     """, unsafe_allow_html=True)
 
-# --- CARREGAMENTO DE DADOS ---
+# --- SIDEBAR ---
 with st.sidebar:
     st.markdown(f"### {t['title']}")
     theme_sel = st.selectbox(t['tema'], ["Dark", "Light"], index=0 if st.session_state.theme == 'Dark' else 1)
@@ -123,6 +127,7 @@ with st.sidebar:
     st.markdown("---")
     uploaded_file = st.file_uploader(t['upload'], type=["csv"])
 
+# --- LÓGICA DE DADOS ---
 DEFAULT_CSV = "Starbucks Store Locations.csv"
 file_to_load = uploaded_file if uploaded_file else (DEFAULT_CSV if os.path.exists(DEFAULT_CSV) else None)
 
@@ -130,21 +135,9 @@ if file_to_load:
     try: df = pd.read_csv(file_to_load, encoding='utf-8')
     except: df = pd.read_csv(file_to_load, encoding='latin-1')
     
-    # NORMALIZAÇÃO DE COLUNAS (Evita o KeyError)
     df.columns = [c.strip().lower() for c in df.columns]
-    mapping = {
-        'latitude': 'lat', 'longitude': 'lon', 
-        'city': 'Cidade', 'country': 'País', 
-        'state/province': 'Estado'
-    }
-    df = df.rename(columns=mapping)
-    
-    # Verifica se as colunas essenciais existem
-    if 'lat' in df.columns and 'lon' in df.columns:
-        df = df.dropna(subset=['lat', 'lon'])
-    else:
-        st.error(f"Colunas de coordenadas não encontradas. Colunas detectadas: {list(df.columns)}")
-        st.stop()
+    mapping = {'latitude': 'lat', 'longitude': 'lon', 'city': 'Cidade', 'country': 'País', 'state/province': 'Estado'}
+    df = df.rename(columns=mapping).dropna(subset=['lat', 'lon'])
 
     with st.sidebar:
         pais_sel = st.selectbox(t['pais'], sorted(df['País'].unique()))
@@ -221,41 +214,41 @@ if file_to_load:
             fmt = st.session_state.suggested_format
             st.markdown(f"**Design Sugerido: {fmt.title()}**")
             st.image(STORE_IMAGES.get(fmt, STORE_IMAGES["core"]), use_container_width=True)
-        
-        # --- FORMULÁRIO DE FEEDBACK ---
-        st.divider()
-        c_b1, c_b2, c_b3 = st.columns([1, 1, 1])
-        with c_b2:
-            if st.button("📊 Avaliar Experiência da Interface", use_container_width=True):
-                st.session_state.show_survey = not st.session_state.show_survey
-                st.rerun()
+    
+    # --- FORMULÁRIO DE AVALIAÇÃO (MOVIMENTADO PARA FORA DO IF AI_ANALYSIS) ---
+    st.divider()
+    c_fb1, c_fb2, c_fb3 = st.columns([1, 1, 1])
+    with c_fb2:
+        if st.button("📊 Avaliar Experiência da Interface", use_container_width=True):
+            st.session_state.show_survey = not st.session_state.show_survey
+            st.rerun()
 
-        if st.session_state.show_survey:
-            with st.container(border=True):
-                st.markdown(f"### Sua opinião é fundamental!")
-                ci1, ci2 = st.columns(2)
-                nome = ci1.text_input("Nome completo", key="n_srv")
-                contato = ci1.text_input("Contato", key="c_srv")
-                email = ci2.text_input("E-mail", key="e_srv")
-                profissao = ci2.text_input("Profissão", key="p_srv")
-                
-                res_likert = {}
-                questions = ["A interface é intuitiva?", "O design visual ajudou?", "A IA foi relevante?", "O mapa ajudou?"]
-                for i, q in enumerate(questions):
-                    res_likert[f"Q{i+1}"] = st.select_slider(q, options=["Worst", "Poor", "Average", "Good", "Excellent"], value="Average", key=f"lk_{i}")
+    if st.session_state.show_survey:
+        with st.container(border=True):
+            st.markdown(f"### Sua opinião é fundamental!")
+            ci1, ci2 = st.columns(2)
+            nome = ci1.text_input("Nome completo", key="n_srv")
+            contato = ci1.text_input("Contato", key="c_srv")
+            email = ci2.text_input("E-mail", key="e_srv")
+            profissao = ci2.text_input("Profissão", key="p_srv")
+            
+            res_likert = {}
+            questions = ["A interface é intuitiva?", "O design visual ajudou?", "A IA foi relevante?", "O mapa ajudou?"]
+            for i, q in enumerate(questions):
+                res_likert[f"Q{i+1}"] = st.select_slider(q, options=t['likert_opts'], value=t['likert_opts'][2], key=f"lk_{i}")
 
-                if st.button("Enviar Avaliação Final", use_container_width=True):
-                    if nome and email and contato:
-                        try:
-                            contato_num = int(re.sub(r'\D', '', contato))
-                            dados = {"nome": nome, "email": email, "contato": contato_num, "profissao": profissao, 
-                                     "q1": res_likert["Q1"], "q2": res_likert["Q2"], "q3": res_likert["Q3"], "q4": res_likert["Q4"]}
-                            supabase.table("respostas").insert(dados).execute()
-                            st.success(f"✅ Obrigado, {nome}!")
-                            st.balloons()
-                            st.session_state.show_survey = False
-                            st.rerun()
-                        except Exception as e: st.error(f"Erro Supabase: {e}")
-                    else: st.warning("Preencha Nome, E-mail e Contato.")
+            if st.button("Enviar Avaliação Final", use_container_width=True):
+                if nome and email and contato:
+                    try:
+                        contato_num = int(re.sub(r'\D', '', contato))
+                        dados = {"nome": nome, "email": email, "contato": contato_num, "profissao": profissao, 
+                                 "q1": res_likert["Q1"], "q2": res_likert["Q2"], "q3": res_likert["Q3"], "q4": res_likert["Q4"]}
+                        supabase.table("respostas").insert(dados).execute()
+                        st.success(f"✅ Obrigado, {nome}!")
+                        st.balloons()
+                        st.session_state.show_survey = False
+                        st.rerun()
+                    except Exception as e: st.error(f"Erro Banco: {e}")
+                else: st.warning("Preencha Nome, E-mail e Contato.")
 else:
     st.info(t['aviso_csv'])
