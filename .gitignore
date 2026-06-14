@@ -1,4 +1,17 @@
 # IDEs
 *.swp
 *.swo
+
+# Secrets e credenciais
+.streamlit/
 starbucks/senha-bd.txt
+
+# Cache Python
+__pycache__/
+*.pyc
+
+# Logs
+*.log
+
+# Dados auxiliares locais (versao alternativa do dataset)
+starbucks/Starbucks Store Locations (1).xlsx
