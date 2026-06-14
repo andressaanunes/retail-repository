@@ -8,6 +8,9 @@ import google.generativeai as genai
 import datetime
 import re
 import os
+import random
+
+from fallback import STORE_IMAGES_FALLBACK as _STORE_IMAGES_FALLBACK
 
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(
@@ -28,22 +31,106 @@ if 'theme' not in st.session_state: st.session_state.theme = 'Light'
 if 'ai_analysis' not in st.session_state: st.session_state.ai_analysis = None
 if 'expansion_coords' not in st.session_state: st.session_state.expansion_coords = []
 if 'suggested_format' not in st.session_state: st.session_state.suggested_format = "core"
+if 'selected_image' not in st.session_state: st.session_state.selected_image = None
 if 'show_survey' not in st.session_state: st.session_state.show_survey = False
 
-STORE_IMAGES = {
-    "drive-thru": "https://images.unsplash.com/photo-1600093463592-8e36ae95ef56?q=80&w=1000&auto=format&fit=crop",
-    "flagship": "https://images.unsplash.com/photo-1554118811-1e0d58224f24?q=80&w=1000&auto=format&fit=crop",
-    "quiosque": "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?q=80&w=1000&auto=format&fit=crop",
-    "core": "https://images.unsplash.com/photo-1501339817302-4448f9958e74?q=80&w=1000&auto=format&fit=crop"
-}
+@st.cache_data(show_spinner=False)
+def baixar_imagem_base64(url: str) -> str | None:
+    """Baixa a imagem no servidor e converte para base64, evitando bloqueios do cliente."""
+    try:
+        import requests, base64, re
+        
+        # Se for um link de compartilhamento do Gemini, primeiro extraímos a imagem real dele
+        if "gemini.google.com/share" in url:
+            r = requests.get(url, timeout=10)
+            if r.status_code == 200:
+                match = re.search(r'(https://lh3\.googleusercontent\.com/[A-Za-z0-9\-_/]+)', r.text)
+                if match:
+                    url = match.group(1)
+                else:
+                    return None
+            else:
+                return None
+                
+        r = requests.get(url, timeout=10)
+        if r.status_code == 200:
+            return base64.b64encode(r.content).decode('utf-8')
+    except Exception:
+        pass
+    return None
+@st.cache_data(ttl=3600, show_spinner=False)
+def carregar_imagens_supabase() -> dict | None:
+    """Busca a tabela public.store_images no Supabase e monta o dict {categoria: [urls]}.
+    Retorna None em caso de falha para que o chamador use o fallback hardcoded."""
+    try:
+        data = []
+        limit = 1000
+        offset = 0
+        while True:
+            res = (
+                supabase.table("store_images")
+                .select("imagem,categoria")
+                .range(offset, offset + limit - 1)
+                .execute()
+            )
+            if not res.data:
+                break
+            data.extend(res.data)
+            if len(res.data) < limit:
+                break
+            offset += limit
+
+        if not data:
+            return None
+
+        agrupado: dict[str, list[str]] = {}
+        for row in data:
+            cat = row.get("categoria")
+            url_img = row.get("imagem")
+            if cat and url_img:
+                agrupado.setdefault(cat, []).append(url_img)
+
+        if not agrupado:
+            return None
+
+        # Garantir que todas as categorias do fallback existem no resultado
+        for cat in _STORE_IMAGES_FALLBACK:
+            agrupado.setdefault(cat, list(_STORE_IMAGES_FALLBACK[cat]))
+
+        return agrupado
+    except Exception:
+        return None
+
+
+STORE_IMAGES = carregar_imagens_supabase() or _STORE_IMAGES_FALLBACK
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def carregar_dados_supabase() -> pd.DataFrame | None:
+    """Busca os dados de lojas no Supabase de forma paginada para evitar o limite de 1000 registros."""
+    try:
+        data = []
+        limit = 1000
+        offset = 0
+        while True:
+            res = supabase.table("lojas").select("*").range(offset, offset + limit - 1).execute()
+            if not res.data:
+                break
+            data.extend(res.data)
+            if len(res.data) < limit:
+                break
+            offset += limit
+        if data:
+            return pd.DataFrame(data)
+    except Exception:
+        pass
+    return None
 
 # --- FUNÇÃO DE CACHE DA IA ---
 @st.cache_data(show_spinner=False)
 def obter_analise_ia(api_key, cidade, num_lojas, densidade, renda, publico, fluxo):
     genai.configure(api_key=api_key)
-    # ALTERADO PARA O MODELO COM MAIOR COTA (500 RPD)
     model = genai.GenerativeModel('gemini-3.1-flash-lite')
-    prompt = f"Consultor estratégico: analise expansão em {cidade}. Lojas atuais: {num_lojas}. Cenário: Densidade {densidade}, Renda {renda}, Público {publico}, Fluxo {fluxo}. Identifique 2 áreas reais. Sugira formato: Drive-thru, Flagship, Quiosque ou Core. Finalize com: FORMATO: [Nome] e COORDENADAS: [LAT, LON, NOME]; [LAT, LON, NOME]"
+    prompt = f"Consultor estratégico: analise expansão na cidade de {cidade}. Lojas atuais: {num_lojas}. Cenário de geolocalização: Densidade {densidade}, Renda {renda}, Público {publico}, Fluxo {fluxo}. ATENÇÃO: Baseie sua análise ESTRITAMENTE na cidade de {cidade}. Não mencione São Paulo ou Rio de Janeiro a menos que seja a cidade solicitada. Identifique 2 áreas reais para expansão em {cidade}. Sugira o formato ideal escolhendo estritamente entre: drive-thru, flagship, quiosque ou core. Finalize obrigatoriamente no formato exato: FORMATO: [formato_escolhido] e COORDENADAS: [LAT, LON, NOME]; [LAT, LON, NOME]"
     response = model.generate_content(prompt)
     return response.text
 
@@ -166,18 +253,54 @@ with st.sidebar:
     st.session_state.lang_selector = st.selectbox("Language", ["Português", "English"], on_change=change_lang)
     st.markdown("---")
     uploaded_file = st.file_uploader(t['upload'], type=["csv"])
+    
+    # Feedback visual sobre qual arquivo está carregado
+    default_csv_path = os.path.join(os.path.dirname(__file__), "starbucks", "Starbucks Store Locations.csv")
+    df = None
+    
+    if uploaded_file:
+        st.success(f"✅ Usando arquivo carregado: **{uploaded_file.name}**")
+        try:
+            df = pd.read_csv(uploaded_file, encoding='utf-8')
+        except Exception:
+            uploaded_file.seek(0)
+            df = pd.read_csv(uploaded_file, encoding='latin-1')
+    else:
+        df_db = carregar_dados_supabase()
+        if df_db is not None and not df_db.empty:
+            df = df_db
+            st.success("☁️ Carregado com sucesso do banco de dados **Supabase**!")
+        elif os.path.exists(default_csv_path):
+            st.info("📂 Usando fallback local: **Starbucks Store Locations.csv**")
+            try:
+                df = pd.read_csv(default_csv_path, encoding='utf-8')
+            except Exception:
+                df = pd.read_csv(default_csv_path, encoding='latin-1')
+        else:
+            st.warning("⚠️ Nenhuma fonte de dados encontrada. Faça o upload de um CSV.")
 
 # --- LÓGICA DE DADOS ---
-DEFAULT_CSV = "Starbucks Store Locations.csv"
-file_to_load = uploaded_file if uploaded_file else (DEFAULT_CSV if os.path.exists(DEFAULT_CSV) else None)
-
-if file_to_load:
-    try: df = pd.read_csv(file_to_load, encoding='utf-8')
-    except: df = pd.read_csv(file_to_load, encoding='latin-1')
+if df is not None:
+    df.columns = [str(c).strip().lower() for c in df.columns]
+    mapping = {
+        'latitude': 'lat', 
+        'longitude': 'lon', 
+        'city': 'Cidade', 
+        'country': 'País', 
+        'state/province': 'Estado',
+        'state_province': 'Estado'
+    }
+    df = df.rename(columns=mapping)
     
-    df.columns = [c.strip().lower() for c in df.columns]
-    mapping = {'latitude': 'lat', 'longitude': 'lon', 'city': 'Cidade', 'country': 'País', 'state/province': 'Estado'}
-    df = df.rename(columns=mapping).dropna(subset=['lat', 'lon'])
+    required_cols = ['lat', 'lon', 'Cidade', 'País', 'Estado']
+    missing_cols = [c for c in required_cols if c not in df.columns]
+    
+    if missing_cols:
+        st.error(f"⚠️ O arquivo carregado não possui algumas colunas obrigatórias.")
+        st.warning(f"**Colunas ausentes:** {', '.join(missing_cols)}")
+        st.stop()
+        
+    df = df.dropna(subset=['lat', 'lon'])
 
     with st.sidebar:
         pais_sel = st.selectbox(t['pais'], sorted(df['País'].unique()))
@@ -234,12 +357,22 @@ if file_to_load:
         else:
             with st.spinner("IA processando estratégia..."):
                 try:
-                    res_ia = obter_analise_ia(api_key, cidade_sel, len(df_f), dens, txt_renda, p_jovem, fluxo)
+                    # Determinar a localização exata para a IA não alucinar com "Todas"
+                    if cidade_sel != t['todas']:
+                        local_ia = f"{cidade_sel}, {estado_sel}, {pais_sel}"
+                    elif estado_sel != t['todas']:
+                        local_ia = f"estado de {estado_sel}, {pais_sel}"
+                    else:
+                        local_ia = f"{pais_sel}"
+                        
+                    res_ia = obter_analise_ia(api_key, local_ia, len(df_f), dens, txt_renda, p_jovem, fluxo)
                     st.session_state.ai_analysis = res_ia
                     match_c = re.findall(r"\[([-+]?\d*\.\d+|\d+),\s*([-+]?\d*\.\d+|\d+),\s*([^\]]+)\]", res_ia)
                     st.session_state.expansion_coords = [{'lat': float(m[0]), 'lon': float(m[1]), 'name': m[2]} for m in match_c]
                     match_f = re.search(r"FORMATO:\s*([\w-]+)", res_ia, re.IGNORECASE)
-                    st.session_state.suggested_format = match_f.group(1).lower() if match_f and match_f.group(1).lower() in STORE_IMAGES else "core"
+                    fmt_detectado = match_f.group(1).lower() if match_f and match_f.group(1).lower() in STORE_IMAGES else "core"
+                    st.session_state.suggested_format = fmt_detectado
+                    st.session_state.selected_image = random.choice(STORE_IMAGES[fmt_detectado])
                     st.rerun()
                 except Exception as e: st.error(f"Erro IA: {e}")
 
@@ -252,8 +385,15 @@ if file_to_load:
             st.markdown(f'<div class="insight-card">{clean_ia}</div>', unsafe_allow_html=True)
         with col_img:
             fmt = st.session_state.suggested_format
-            st.markdown(f"**Design Sugerido: {fmt.title()}**")
-            st.image(STORE_IMAGES.get(fmt, STORE_IMAGES["core"]), use_container_width=True)
+            st.markdown(f"**🏗️ Design Sugerido: {fmt.title()}**")
+            if 'selected_image' not in st.session_state or not st.session_state.selected_image:
+                st.session_state.selected_image = random.choice(STORE_IMAGES.get(fmt, STORE_IMAGES["core"]))
+            url_img = st.session_state.selected_image
+            b64 = baixar_imagem_base64(url_img)
+            if b64:
+                st.markdown(f'<img src="data:image/jpeg;base64,{b64}" style="width:100%;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.2);"/>', unsafe_allow_html=True)
+            else:
+                st.image(url_img, use_container_width=True)
     
     # --- FORMULÁRIO DE AVALIAÇÃO (MOVIMENTADO PARA FORA DO IF AI_ANALYSIS) ---
     st.divider()
