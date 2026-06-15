@@ -33,6 +33,7 @@ if 'expansion_coords' not in st.session_state: st.session_state.expansion_coords
 if 'suggested_format' not in st.session_state: st.session_state.suggested_format = "core"
 if 'selected_image' not in st.session_state: st.session_state.selected_image = None
 if 'show_survey' not in st.session_state: st.session_state.show_survey = False
+if 'feedback_enviado' not in st.session_state: st.session_state.feedback_enviado = False
 
 @st.cache_data(show_spinner=False)
 def baixar_imagem_base64(url: str) -> str | None:
@@ -218,12 +219,66 @@ st.markdown(f"""
     }}
 
     /* Correção campos de seleção e inputs */
-    div[data-baseweb="select"] > div, 
-    div[data-baseweb="input"] > div, 
+    div[data-baseweb="select"] > div,
+    div[data-baseweb="input"] > div,
     div[data-baseweb="base-input"] {{
         background-color: {bg_widget} !important;
         color: {text_main} !important;
         border: 1px solid {border_card} !important;
+    }}
+
+    /* Texto digitado dentro dos inputs/textareas (visivel em fundo claro e escuro) */
+    div[data-baseweb="input"] input,
+    div[data-baseweb="input"] textarea,
+    div[data-baseweb="base-input"] input,
+    div[data-baseweb="base-input"] textarea,
+    input[type="text"],
+    input[type="email"],
+    input[type="number"],
+    textarea {{
+        color: {text_main} !important;
+        background-color: transparent !important;
+        caret-color: {text_main} !important;
+    }}
+
+    /* Placeholder sempre visivel */
+    div[data-baseweb="input"] input::placeholder,
+    div[data-baseweb="input"] textarea::placeholder,
+    div[data-baseweb="base-input"] input::placeholder,
+    input::placeholder,
+    textarea::placeholder {{
+        color: {text_sub} !important;
+        opacity: 0.8 !important;
+    }}
+
+    /* Texto selecionado (highlight) */
+    ::selection {{
+        background-color: {accent} !important;
+        color: #FFFFFF !important;
+    }}
+    div[data-baseweb="input"] input::selection,
+    textarea::selection {{
+        background-color: {accent} !important;
+        color: #FFFFFF !important;
+    }}
+
+    /* Texto dentro dos selects (selectboxes) */
+    div[data-baseweb="select"] span,
+    div[data-baseweb="select"] [role="combobox"] {{
+        color: {text_main} !important;
+    }}
+    /* Itens do dropdown aberto */
+    [data-baseweb="menu"] li,
+    [data-baseweb="menu"] span,
+    ul[role="listbox"] li {{
+        color: #1e3d33 !important;
+        background-color: #ffffff !important;
+    }}
+
+    /* Slider (caixa do likert) - cor do valor selecionado */
+    div[data-baseweb="slider"] span,
+    div[data-baseweb="slider"] div {{
+        color: {text_main} !important;
     }}
 
     [data-testid="stVerticalBlockBorderWrapper"] {{
@@ -418,17 +473,31 @@ if df is not None:
                 res_likert[f"Q{i+1}"] = st.select_slider(q, options=t['likert_opts'], value=t['likert_opts'][2], key=f"lk_{i}")
 
             if st.button("Enviar Avaliação Final", use_container_width=True):
-                if nome and email and contato:
+                if not (nome and email and contato):
+                    st.warning("Preencha Nome, E-mail e Contato.")
+                else:
                     try:
-                        contato_num = int(re.sub(r'\D', '', contato))
-                        dados = {"nome": nome, "email": email, "contato": contato_num, "profissao": profissao, 
+                        dados = {"nome": nome, "email": email, "contato": contato.strip(), "profissao": profissao,
                                  "q1": res_likert["Q1"], "q2": res_likert["Q2"], "q3": res_likert["Q3"], "q4": res_likert["Q4"]}
                         supabase.table("respostas").insert(dados).execute()
-                        st.success(f"✅ Obrigado, {nome}!")
-                        st.balloons()
+                        st.session_state.feedback_enviado = True
                         st.session_state.show_survey = False
                         st.rerun()
                     except Exception as e: st.error(f"Erro Banco: {e}")
-                else: st.warning("Preencha Nome, E-mail e Contato.")
+
+    if st.session_state.feedback_enviado:
+        with st.container(border=True):
+            st.markdown(
+                f'<div style="text-align:center;padding:30px 10px;">'
+                f'<h2 style="color:{accent};margin-bottom:10px;">✅ Avaliação enviada com sucesso!</h2>'
+                f'<p style="font-size:18px;">Muito obrigado pelo seu feedback. Sua opinião é fundamental para melhorarmos a interface.</p>'
+                f'</div>',
+                unsafe_allow_html=True
+            )
+            c_reset1, c_reset2, c_reset3 = st.columns([1, 1, 1])
+            with c_reset2:
+                if st.button("Enviar nova avaliação", use_container_width=True):
+                    st.session_state.feedback_enviado = False
+                    st.rerun()
 else:
     st.info(t['aviso_csv'])
