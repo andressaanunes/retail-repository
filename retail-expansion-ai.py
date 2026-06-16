@@ -337,7 +337,7 @@ with st.sidebar:
 # --- LÓGICA DE DADOS ---
 if df is not None:
     df.columns = [str(c).strip().lower() for c in df.columns]
-    mapping = {
+    mapping = {j
         'latitude': 'lat', 
         'longitude': 'lon', 
         'city': 'Cidade', 
