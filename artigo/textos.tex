@@ -317,8 +317,7 @@ def obter_analise_ia(api_key, cidade, num_lojas, densidade, renda, publico, flux
 \end{lstlisting}
 
 \vspace{0.1cm}
-\centering
-{ \footnotesize \textbf{Fonte:} elaborada pela autora.\par}
+{\centering \footnotesize \textbf{Fonte:} elaborada pela autora.\par}
 
 \subsection{\esp Avaliação de Experiência do Usuário (Escala Likert)}
 
@@ -330,9 +329,9 @@ O questionário foi estruturado em quatro perguntas de múltipla escolha, utiliz
 
 \subsubsection{\esp Amostra e aplicação}
 
-O link público da ferramenta, acompanhado de uma breve descrição do objetivo do estudo e do termo de consentimento, foi encaminhado para \textbf{100 pessoas}. Os participantes foram selecionados por conveniência, com os seguintes critérios: (a) serem profissionais, estudantes ou pesquisadores com vínculo direto ou indireto com o varejo, marketing, tecnologia da informação ou análise de dados (a amostra efetiva incluiu analistas de dados, desenvolvedores de software, engenheiros de IA, professores e estudantes); (b) terem familiaridade mínima com interfaces web; e (c) terem acessado a ferramenta e visualizado pelo menos um relatório gerado pela IA. A aplicação ocorreu ao longo de \textbf{3 semanas}, ao final das quais \textbf{13 respondentes} haviam preenchido efetivamente o formulário -- taxa de resposta de 13\%, compatível com surveys online sem incentivo financeiro.
+O link público da ferramenta, acompanhado de uma breve descrição do objetivo do estudo e do termo de consentimento, foi encaminhado para \textbf{100 pessoas}. Os participantes foram selecionados por conveniência, com os seguintes critérios: (a) serem profissionais, estudantes ou pesquisadores com vínculo direto ou indireto com o varejo, marketing, tecnologia da informação ou análise de dados (a amostra efetiva incluiu analistas de dados, desenvolvedores de software, engenheiros de IA, professores e estudantes); (b) terem familiaridade mínima com interfaces web; e (c) terem acessado a ferramenta e visualizado pelo menos um relatório gerado pela IA. A aplicação ocorreu ao longo de \textbf{3 semanas}, ao final das quais \textbf{21 respondentes} haviam preenchido efetivamente o formulário -- taxa de resposta de 21\%, compatível com surveys online sem incentivo financeiro.
 
-A Tabela \ref{tab:likert} apresenta as médias obtidas em cada pergunta. Observa-se um padrão claro: as dimensões relacionadas às \textbf{saídas analíticas} da ferramenta obtiveram avaliação superior (\textbf{4,23} tanto para a relevância dos \textit{insights} da IA quanto para a utilidade do mapa). Já as dimensões ligadas à \textbf{camada de interação} receberam avaliação mais contida (\textbf{3,69} para intuitividade da interface e \textbf{3,85} para o \textit{design} visual). A média global foi de \textbf{4,00} em escala de 1 a 5.
+A Tabela \ref{tab:likert} apresenta as médias obtidas em cada pergunta. Observa-se que as dimensões relacionadas às \textbf{saídas analíticas} da ferramenta obtiveram avaliação levemente superior (\textbf{3,90} tanto para a relevância dos \textit{insights} da IA quanto para a utilidade do mapa). Já as dimensões ligadas à \textbf{camada de interação} receberam avaliação mais contida (\textbf{3,19} para intuitividade da interface e \textbf{3,76} para o \textit{design} visual). A média global foi de \textbf{3,69} em escala de 1 a 5.
 
 Esse comportamento sugere que a ferramenta entrega valor por meio de seus resultados -- os \textit{insights} e a visualização geoespacial --, mas indica espaço para evolução da usabilidade. As ressalvas provavelmente estão associadas à latência da \textit{API} do \textit{Gemini} e à curva de aprendizado dos filtros regionais. Nenhuma pergunta apresentou média abaixo do nível ``Médio'' (3), o que indica recepção global positiva, ainda que não uniforme entre as dimensões.
 
@@ -344,18 +343,18 @@ Esse comportamento sugere que a ferramenta entrega valor por meio de seus result
     \begin{tabular}{|c|p{7,5cm}|c|c|}
     \hline
     \textbf{Pergunta} & \textbf{Dimensão avaliada} & \textbf{Média (1--5)} & \textbf{Interpretação} \\ \hline
-    Q1 & Intuitividade da interface & 3,69 & Bom (regular) \\ \hline
-    Q2 & Contribuição do \textit{design} visual & 3,85 & Bom \\ \hline
-    Q3 & Relevância dos \textit{insights} da IA & 4,23 & Bom (alto) \\ \hline
-    Q4 & Utilidade do mapa interativo & 4,23 & Bom (alto) \\ \hline
-    \multicolumn{2}{|r|}{\textbf{Média global}} & \textbf{4,00} & \textbf{Bom} \\ \hline
+    Q1 & Intuitividade da interface & 3,19 & Médio \\ \hline
+    Q2 & Contribuição do \textit{design} visual & 3,76 & Bom \\ \hline
+    Q3 & Relevância dos \textit{insights} da IA & 3,90 & Bom \\ \hline
+    Q4 & Utilidade do mapa interativo & 3,90 & Bom \\ \hline
+    \multicolumn{2}{|r|}{\textbf{Média global}} & \textbf{3,69} & \textbf{Bom} \\ \hline
     \end{tabular}
     \vspace{0,1cm}
     \centering
-    {\footnotesize \textbf{Fonte:} elaborada pela autora (n=13).\par}
+    {\footnotesize \textbf{Fonte:} elaborada pela autora (n=21).\par}
 \end{table}
 
-Reconhecemos que o tamanho reduzido da amostra ($n=13$) constitui uma limitação importante do estudo, impedindo generalizações estatísticas e exigindo cautela na interpretação dos resultados; recomenda-se, em trabalhos futuros, ampliar a amostra e diversificar o perfil dos respondentes.
+Reconhecemos que o tamanho reduzido da amostra ($n=21$) constitui uma limitação importante do estudo, impedindo generalizações estatísticas e exigindo cautela na interpretação dos resultados; recomenda-se, em trabalhos futuros, ampliar a amostra e diversificar o perfil dos respondentes.
 
 Armazenamos as avaliações coletadas na plataforma \href{https://supabase.com/}{\textit{Supabase}}, na tabela \texttt{respostas}, cuja coluna \texttt{contato} foi convertida para o tipo \texttt{text} para aceitar tanto telefone quanto e-mail. O fluxo de \textit{feedback} foi refinado: após a submissão, a interface exibe um \textit{card} persistente de confirmação (``Avaliação enviada com sucesso!'') em vez de uma mensagem efêmera, melhorando a clareza da UX. Além das avaliações, o \textit{Supabase} hospeda as tabelas \texttt{lojas} (CSV Starbucks migrado) e \texttt{store\_images} (20 referências arquitetônicas categorizadas em \textit{drive-thru}, \textit{flagship}, \textit{quiosque} e \textit{core}). Realizamos testes iniciais com volume limitado de registros. A limitação ocorreu devido a instabilidades na cota de \textit{tokens} da \textit{API} do \textit{Gemini} durante a fase experimental. Contudo, os registros validam a comunicação entre a interface e o servidor \textit{backend}. A Figura \ref{fig:supabase} demonstra a persistência dessas informações no banco de dados.
 
