@@ -15,3 +15,15 @@ __pycache__/
 
 # Dados auxiliares locais (versao alternativa do dataset)
 starbucks/Starbucks Store Locations (1).xlsx
+
+# Dados sensíveis (LGPD) — respostas do questionário com dados pessoais
+respostas_rows.csv
+
+# Feedback privado da orientadora (não publicar)
+*Feedback*TCC*.pdf
+
+# Build artifacts do Overleaf
+artigo_overleaf.zip
+
+# Cópia antiga do artigo na raiz (mantida apenas localmente)
+/artigo.tex
