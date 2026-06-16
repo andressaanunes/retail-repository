@@ -1,6 +1,6 @@
 # ☕ Retail Insights
 
-**Simulador de Expansão — Análise de Vazios Comerciais via IA Geográfica**
+**Simulador de Expansão — Análise de Identificação de Pontos Comerciais via IA Geográfica**
 
 Aplicação interativa para análise estratégica de expansão de redes varejistas, combinando geolocalização, inteligência artificial (Gemini) e visualização em mapas interativos.
 
