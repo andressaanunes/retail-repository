@@ -324,7 +324,7 @@ with st.sidebar:
         df_db = carregar_dados_supabase()
         if df_db is not None and not df_db.empty:
             df = df_db
-            st.success("☁️ Carregado com sucesso do banco de dados **Supabase**!")
+            st.success("☁️ Carregado com sucesso do banco de dados.")
         elif os.path.exists(default_csv_path):
             st.info("📂 Usando fallback local: **Starbucks Store Locations.csv**")
             try:
