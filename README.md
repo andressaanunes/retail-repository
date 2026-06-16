@@ -1,56 +1,68 @@
-[![Open in Codespaces](https://classroom.github.com/assets/launch-codespace-2972f46106e565e64193e422d61a12cf1da4916b45550586e14ef0a7c637dd04.svg)](https://classroom.github.com/open-in-codespaces?assignment_repo_id=23520267)
-# Informação sobre o Trabalho de Conclusão de Curso (TCC)
-`TÍTULO DO TCC`  
+# ☕ Retail Insights
 
-Trabalho de Conclusão de Curso (TCC)
+**Simulador de Expansão — Análise de Vazios Comerciais via IA Geográfica**
 
-`CURSO`: 
+Aplicação interativa para análise estratégica de expansão de redes varejistas, combinando geolocalização, inteligência artificial (Gemini) e visualização em mapas interativos.
 
-`SEMESTRE:`
+## Funcionalidades
 
-`Objetivos de Desenvolvimento Sustentável (ODS) da ONU:` 
-> Incluir o(s) número(s) e a(s) descrição(ões) do(s) ODS da ONU que o TCC atende. 
+- **Mapa interativo** com clustering de lojas e sugestões de expansão (Folium)
+- **Simulador de cenários** com parâmetros: densidade populacional, renda, público-alvo e fluxo de pedestres
+- **Análise estratégica via IA** (Google Gemini) com sugestões de localização e formato ideal de loja (drive-thru, flagship, quiosque ou core)
+- **KPIs dinâmicos** por país, estado e cidade
+- **Formulário de avaliação** com escala Likert integrado ao Supabase
+- **Interface bilíngue** (Português/Inglês) com tema claro/escuro
 
-## Participantes
+## Tecnologias
 
-Os membros da equipe são: 
-- Fulano da Silva
-- Ciclano Albuquerque
+| Tecnologia | Uso |
+|---|---|
+| [Streamlit](https://streamlit.io/) | Framework web |
+| [Folium](https://python-visualization.github.io/folium/) | Mapas interativos |
+| [Google Gemini](https://ai.google.dev/) | Análise estratégica de expansão |
+| [Supabase](https://supabase.com/) | Banco de dados (lojas, imagens, respostas) |
+| [Pandas](https://pandas.pydata.org/) | Manipulação de dados |
 
-> Incluir a lista dos membros da equipe com seus nomes completos.
+## Pré-requisitos
 
-# Estrutura do Projeto
+- Python 3.11+
 
-1. [Introdução](./docs/1-Introdução.md)
-2. [Trabalhos Relacionados](./docs/2-TrabalhosRelacionados.md)
-3. [Especificação](./docs/3-Especificação.md)
-4. [Metodologia](./docs/4-Metodologia.md)
-5. [Resultado](./docs/5-Resultado.md)
-6. [Conclusão](./docs/6-Conclusão.md)
-7. [Referências Bibliográficas](./docs/7-Referências.md) 
+## Instalação
 
-## Pasta docs
+```bash
+pip install streamlit pandas folium streamlit-folium supabase google-generativeai requests
+```
 
-Esta pasta arquiva a documentação dos projetos.
+## Configuração
 
-Na pasta `docs`, há uma subpasta `apresentacao` que armazena os arquivos utilizados para a apresentação do trabalho.
+Crie um arquivo `.streamlit/secrets.toml` com as seguintes chaves:
 
-Na pasta `docs`, há uma subpasta `artigo` que arquiva o artigo do trabalho.
+```toml
+SUPABASE_URL = "https://<seu-projeto>.supabase.co"
+SUPABASE_KEY = "<sua-chave-anon>"
+GEMINI_API_KEY = "<sua-chave-gemini>"
+```
 
-Na pasta `docs`, há uma subpasta `imagem` que armazena todas as
-imagens utilizadas para a elaboração do documento.
+## Execução
 
-Na pasta `docs`, há uma subpasta `video` que arquiva todos os
-videos do trabalho.
+```bash
+streamlit run retail-expansion-ai.py
+```
 
-## Pasta src
+## Estrutura do CSV esperado
 
-Este diretório armazena o código fonte do projeto
+O arquivo de entrada deve conter as colunas (case-insensitive):
 
-### Links Úteis:
+| Coluna | Descrição |
+|---|---|
+| `Latitude` | Latitude da loja |
+| `Longitude` | Longitude da loja |
+| `City` | Cidade |
+| `Country` | País |
+| `State/Province` | Estado ou província |
 
-Aprenda Markdown e use-o para documentar o projeto  
+O carregamento segue a prioridade: **CSV enviado** > **Supabase** > **fallback local**.
 
-> [Sintaxe básica de gravação e formatação no GitHub](https://guides.github.com/features/mastering-markdown/)
+## Licença
 
-> [Suporte Github](https://help.github.com/pt/github/writing-on-github/getting-started-with-writing-and-formatting-on-github)
+Este projeto é de uso acadêmico (TCC).
